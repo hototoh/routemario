@@ -5,9 +5,11 @@ lib*
 
 CMakeCache.txt
 CMakeFiles/*
+CMakeFiles
 Makefile
 cmake_install.cmake
 (\w*)/CMakeCache.txt
 (\w*)/CMakeFiles/*
+(\w*)/CMakeFiles
 (\w*)/Makefile
 (\w*)/cmake_install.cmake

@@ -2,3 +2,12 @@
 *.h~
 lib*
 
+
+CMakeCache.txt
+CMakeFiles/*
+Makefile
+cmake_install.cmake
+(\w*)/CMakeCache.txt
+(\w*)/CMakeFiles/*
+(\w*)/Makefile
+(\w*)/cmake_install.cmake

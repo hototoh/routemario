@@ -26,6 +26,7 @@
 #include <rte_mempool.h>
 #include <rte_malloc.h>
 
+#include "routemario.h"
 #include "fdb.h"
 
 #define mmalloc(x) rte_malloc("l2sw", (x), 0)
@@ -33,7 +34,8 @@
 
 #define FDB_SIZE 1 << 20
 
-#define RTE_LOGTYPE_L2SW RTE_LOGTYPE_USER1
+#define RTE_LOGTYPE_MARIO RTE_LOGTYPE_USER1
+
 #define MBUF_DATA_SIZE (2048 + RTE_PKTMBUF_HEADROOM)
 #define MAX_PKT_BURST 32
 #define BURST_TX_DRAIN_US 100 /* TX drain every ~100us */
@@ -52,13 +54,6 @@ static uint16_t nb_txd = RTE_TEST_TX_DESC_DEFAULT;
 struct mbuf_table {
 	unsigned len;
 	struct rte_mbuf *m_table[MAX_PKT_BURST];
-};
-
-struct lcore_env {
-  uint8_t n_port;
-  uint8_t lcore_id;
-  struct fdb_table* fdb;
-  struct mbuf_table tx_mbufs[0];
 };
 
 /*
@@ -214,8 +209,8 @@ l2sw_flooding(struct lcore_env *env, struct rte_mbuf *buf,
 }
 
 static void
-l2sw_simple_switching(struct lcore_env *env, struct rte_mbuf* buf,
-                      uint8_t src_port)
+ether_switching(struct lcore_env *env, struct rte_mbuf* buf,
+               uint8_t src_port)
 {
   struct fdb_table *fdb = env->fdb;
   struct fdb_entry *dst_entry;
@@ -236,17 +231,57 @@ l2sw_simple_switching(struct lcore_env *env, struct rte_mbuf* buf,
 }
 
 static void
+ether_input(struct lcore_env *env, struct rte_mbuf** buf,
+            unsigned n_rx, uint8_t src_port)
+{
+  for(uint32_t j = 0; j < n_rx; j++) {
+    int res;
+    struct rte_mbuf* pkt = pkt_burst[j];
+    rte_prefetch0(rte_pktmbuf_mtod(pkt, void *));
+    
+    struct ether_hdr *eth = rte_pktmbuf_mtod(pkt, struct ether_hdr *);
+    RTE_LOG(INFO, MARIO, "%s\n\tl2_len: %lu\n\tl3_len\n\tl4_len:%lu\n",
+            pkt->l2_len, pkt->l3_len, pkt->l4_len);
+    pkt->l2_len = ETHER_HDR_LEN;
+    switch (eth->ether_type) {
+      case ETHER_TYPE_ARP: {
+        res = arp_input(env, pkt);
+        break;
+      }
+      case ETHER_TYPE_IP: {
+        res = ip_input(env, pkt);
+        break;
+      }
+      case ETHER_TYPE_v6: {
+        ;
+        break;
+      }
+    }
+
+    /**
+     * If ret is 0, need to l2-switching.
+     * Or no need any more processing.
+     */
+    if (res) {
+      // consumed
+      continue;
+    }
+
+    ether_switching(env, pkt, port_id);    
+  }
+}
+
+static void
 l2sw_main_process(struct lcore_env *env)
 {
   struct rte_mbuf *pkt_burst[MAX_PKT_BURST];
-  struct rte_mbuf *pkt;
   uint8_t n_ports = rte_eth_dev_count();
   unsigned lcore_id = rte_lcore_id();
   uint64_t prev_tsc, diff_tsc, cur_tsc, timer_tsc;
   const uint64_t drain_tsc = (rte_get_tsc_hz() + US_PER_S - 1) / US_PER_S 
                              * BURST_TX_DRAIN_US;
   
-  RTE_LOG(INFO, L2SW, "[%u] Starting main processing.\n", lcore_id);
+  RTE_LOG(INFO, MARIO, "[%u] Starting main processing.\n", lcore_id);
   
 	prev_tsc = 0;
 	timer_tsc = 0;
@@ -264,13 +299,10 @@ l2sw_main_process(struct lcore_env *env)
 
 			/* if timer is enabled */
 			if (timer_period > 0) {
-
 				/* advance the timer */
 				timer_tsc += diff_tsc;
-
 				/* if timer has reached its timeout */
 				if (unlikely(timer_tsc >= (uint64_t) timer_period)) {
-
 					/* do this only on master core */
 					if (lcore_id == rte_get_master_lcore()) {
 						print_stats(env);
@@ -287,16 +319,13 @@ l2sw_main_process(struct lcore_env *env)
       unsigned n_rx = rte_eth_rx_burst(port_id, lcore_id,
                                        pkt_burst, MAX_PKT_BURST);
       if (n_rx != 0)
-        RTE_LOG(INFO, L2SW, "[%u-%u] %u packet(s) came.\n",
+        RTE_LOG(INFO, MARIO, "[%u-%u] %u packet(s) came.\n",
                 lcore_id, port_id,  n_rx);
 
       __sync_fetch_and_add(&port_statistics[port_id].rx, n_rx);
-      for(uint32_t j = 0; j < n_rx; j++) {
-        pkt = pkt_burst[j];
-        rte_prefetch0(rte_pktmbuf_mtod(pkt, void *));
-        l2sw_simple_switching(env, pkt, port_id);
-      }
-    }      
+
+      ether_input(env, pkt_burst, n_rx, port_id);
+    }
   }
   return ;
 }
@@ -304,7 +333,7 @@ l2sw_main_process(struct lcore_env *env)
 static int
 l2sw_launch_one_lcore(void *env)
 {
-	RTE_LOG(INFO, L2SW, "[%u]processing launch\n", rte_lcore_id());
+	RTE_LOG(INFO, MARIO, "[%u]processing launch\n", rte_lcore_id());
   uint8_t lcore_id = rte_lcore_id();
 
   l2sw_main_process(((struct lcore_env**) env)[lcore_id]);
@@ -357,7 +386,7 @@ l2sw_parse_args(int argc, char **argv)
       case 'q':
         l2sw_rx_queue_per_lcore = l2sw_parse_nqueue(optarg);
         if (l2sw_rx_queue_per_lcore == 0) {
-          RTE_LOG(ERR, L2SW, "Invalid queue number\n");
+          RTE_LOG(ERR, MARIO, "Invalid queue number\n");
           return -1;
         }
         break;
@@ -447,11 +476,11 @@ main(int argc, char **argv)
 
   ret = l2sw_parse_args(argc, argv);
   if (ret < 0)
-    rte_exit(EXIT_FAILURE, "Invalid L2SW arguments\n");
+    rte_exit(EXIT_FAILURE, "Invalid MARIO arguments\n");
 
   lcore_count = rte_lcore_count();
   n_ports = rte_eth_dev_count();
-  RTE_LOG(INFO, L2SW, "Find %u logical cores\n" , lcore_count);
+  RTE_LOG(INFO, MARIO, "Find %u logical cores\n" , lcore_count);
 
   l2sw_pktmbuf_pool = rte_pktmbuf_pool_create("mbuf_pool", NB_MBUF, 32, 0,
                                               MBUF_DATA_SIZE, 
@@ -462,7 +491,7 @@ main(int argc, char **argv)
   n_ports = rte_eth_dev_count();
   if (n_ports == 0) 
     rte_exit(EXIT_FAILURE, "No Ethernet ports - byte\n");
-  RTE_LOG(INFO, L2SW, "Find %u ethernet ports\n", n_ports);
+  RTE_LOG(INFO, MARIO, "Find %u ethernet ports\n", n_ports);
 
   if (n_ports > RTE_MAX_ETHPORTS)
     n_ports = RTE_MAX_ETHPORTS;
@@ -504,13 +533,13 @@ main(int argc, char **argv)
 
 	/* Initialise each port */
   for(uint8_t port_id = 0; port_id < n_ports; port_id++) {
-    RTE_LOG(INFO, L2SW, "Initializing port %u...", port_id);
+    RTE_LOG(INFO, MARIO, "Initializing port %u...", port_id);
     fflush(stdout);
     ret = rte_eth_dev_configure(port_id, lcore_count, lcore_count, &port_conf);
 		if (ret < 0)
 			rte_exit(EXIT_FAILURE, "Cannot configure device: err=%d, port=%u\n",
                ret, (unsigned)port_id);
-    RTE_LOG(INFO, L2SW, "done\n");
+    RTE_LOG(INFO, MARIO, "done\n");
 		rte_eth_macaddr_get(port_id, &l2sw_ports_eth_addr[port_id]);
 
 		/* init one RX queue */
@@ -543,7 +572,7 @@ main(int argc, char **argv)
 
     rte_eth_promiscuous_enable(port_id);
 
-    RTE_LOG(INFO, L2SW,
+    RTE_LOG(INFO, MARIO,
             "Port %u, MAC address %02x:%02x:%02x:%02x:%02x:%02x\n\n",
             port_id,
             l2sw_ports_eth_addr[port_id].addr_bytes[0],

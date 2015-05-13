@@ -10,10 +10,9 @@
 #include <rte_common.h>
 #include <rte_ether.h>
 #include <rte_mbuf.h>
-
-#include "routemario.h"
-
 #define ARP_TABLE_EXPIRE_TIME 300
+
+struct lcore_env;
 
 struct arp_table_entry {
   struct ether_addr eth_addr;
@@ -22,7 +21,7 @@ struct arp_table_entry {
 };
 
 struct arp_table {
-  struct rte_hash *handler
+  struct rte_hash *handler;
   struct arp_table_entry items[0];
 };
 
@@ -33,18 +32,18 @@ void
 destroy_arp_table(struct arp_table* table);
 
 int
-add_arp_table_entry(struct arp_table* table, const struct ether_addr* addr,
-                    const uint32_t ip_addr);
+add_arp_table_entry(struct arp_table* table, const uint32_t *ip_addr,
+                    const struct ether_addr* addr);
 
 int
-remove_arp_table_entry(struct arp_table* table, const uint32_t ip_addr);
+remove_arp_table_entry(struct arp_table* table, const uint32_t *ip_addr);
 
 struct arp_table_entry*
-lookup_arp_entry(struct arp_table* table, const uint32_t ip_addr);
+lookup_arp_entry(struct arp_table* table, const uint32_t *ip_addr);
 
 int
-lookup_bulk_arp_table_entries(struct arp_table* talbe, 
-                              const struct ether_addr** addrs,
+lookup_bulk_arp_table_entries(struct arp_table *talbe, 
+                              const uint32_t **ip_addrs,
                               uint32_t num_entry,
                               struct arp_table_entry** entries);
 

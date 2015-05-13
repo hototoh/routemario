@@ -7,17 +7,34 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include <errno.h>
 
 #include <rte_common.h>
+#include <rte_ethdev.h>
 #include <rte_ether.h>
 #include <rte_mbuf.h>
 #include <rte_arp.h>
 #include <rte_hash.h>
 #include <rte_jhash.h>
+#include <rte_log.h>
+#include <rte_debug.h>
+#include <rte_errno.h>
+#include <rte_memcpy.h>
+#include <rte_random.h>
+#include <rte_lcore.h>
+#include <rte_ring.h>
+#include <rte_branch_prediction.h>
+#include <rte_byteorder.h>
+#include <rte_malloc.h>
 
-#include "routemario.h"
+#include "util.h"
 #include "arp.h"
+#include "runtime.h"
+
+#define mmalloc(x) rte_malloc("fdb", (x), 0)
+#define mfree(x) rte_free((x))
+
 
 #define RTE_LOGTYPE_ARP_TABLE RTE_LOGTYPE_USER1
 
@@ -68,14 +85,14 @@ destroy_arp_table(struct arp_table* table)
 }
 
 int
-add_arp_table_entry(struct arp_table* table, const struct ether_addr* addr,
-              const uint16_t port)
+add_arp_table_entry(struct arp_table* table, const uint32_t *ip_addr,
+                    const struct ether_addr* addr)
 {
-  int32_t key = rte_hash_add_key(table->handler, addr);
+  int32_t key = rte_hash_add_key(table->handler, ip_addr);
   if (key >= 0) {
     struct arp_table_entry *entry = &table->items[key];
-    ether_addr_copy(addr, &entry->addr);
-    entry->port = port;
+    ether_addr_copy(addr, &entry->eth_addr);
+    entry->ip_addr = *ip_addr;
     entry->expire = ARP_TABLE_EXPIRE_TIME;
     return 0;
   }
@@ -95,13 +112,13 @@ add_arp_table_entry(struct arp_table* table, const struct ether_addr* addr,
 }
 
 int
-remove_arp_table_entry(struct arp_table* table, const struct ether_addr* addr)
+remove_arp_table_entry(struct arp_table* table, const uint32_t *ip_addr)
 {
-  int32_t key = rte_hash_del_key(table->handler, addr);
+  int32_t key = rte_hash_del_key(table->handler, ip_addr);
   if (key >= 0) {
     struct arp_table_entry *entry = &table->items[key];
-    ether_addr_copy((struct ether_addr*) "000000", &entry->addr);
-    entry->port = 0;
+    ether_addr_copy((struct ether_addr*) "000000", &entry->eth_addr);
+    entry->ip_addr = 0;
     entry->expire = 0;
     
     return 0;
@@ -119,9 +136,9 @@ remove_arp_table_entry(struct arp_table* table, const struct ether_addr* addr)
 }
 
 struct arp_table_entry*
-lookup_arp_table_entry(struct arp_table* table, const struct ether_addr* addr)
+lookup_arp_table_entry(struct arp_table* table, const uint32_t *ip_addr)
 {
-  int32_t key = rte_hash_lookup(table->handler, (void*) addr);
+  int32_t key = rte_hash_lookup(table->handler, (void*) ip_addr);
   if (key >= 0) {
     struct arp_table_entry *entry = &table->items[key];
     return entry;
@@ -139,12 +156,13 @@ lookup_arp_table_entry(struct arp_table* table, const struct ether_addr* addr)
 }
 
 int
-lookup_bulk_fdb_entries(struct arp_table* table,
-                        const struct ether_addr** addrs,
-                        uint32_t num_entry, struct arp_table_entry** entries)
+lookup_bulk_arp_table_entries(struct arp_table *table,
+                              const uint32_t **ip_addrs,
+                              uint32_t num_entry,
+                              struct arp_table_entry** entries)
 {
   int32_t positions[num_entry];
-  int res = rte_hash_lookup_bulk(table->handler, (const void**) addrs,
+  int res = rte_hash_lookup_bulk(table->handler, (const void**) ip_addrs,
                                  num_entry, (int32_t*) positions);
   if (res ==  0) {
     for (uint32_t i = 0; i < num_entry; i++) {
@@ -165,15 +183,14 @@ arp_request_process(struct lcore_env* env, struct rte_mbuf* buf,
   int res;
   struct ether_hdr*eth;
   struct arp_ipv4 *body = &arphdr->arp_data;
-  if (!is_own_ip_addr(body->arp_tip)) return 1;
+  if (!is_own_ip_addr(body->arp_tip)) return 0;
   
-  res = add_arp_table_entry(env->arp_table, &body->arp_sha,
-                            &body->arp_sip);
+  res = add_arp_table_entry(env->arp_tb, &body->arp_sip, &body->arp_sha);
   if (res) {
     RTE_LOG(ERR, ARP_TABLE, 
             "No more space for arp table: Drop ARP request.\n");
-    rte_pkt_mbuf_free(buf);
-    return 1;
+    rte_pktmbuf_free(buf);
+    return 0;
   }
 
   struct ether_addr tmp = body->arp_tha;
@@ -187,8 +204,7 @@ arp_request_process(struct lcore_env* env, struct rte_mbuf* buf,
   eth->d_addr = body->arp_tha;
   eth->s_addr = body->arp_sha;
 
-
-  return 0;
+  return 1;
 }
 
 static int
@@ -200,32 +216,31 @@ arp_reply_process(struct lcore_env* env, struct rte_mbuf* buf,
   struct arp_ipv4 *body = &arphdr->arp_data;
   rte_eth_macaddr_get(buf->port, &etheraddr);
   
-  if (!is_same_ether_addr(&body->arp_tha, &etheraddr)) return 1;
+  if (!is_same_ether_addr(&body->arp_tha, &etheraddr)) return 0;
     
-  res = add_arp_table_entry(env->arp_table, &body->arp_sha, body->arp_sip);
-  if (res) return 1;
+  res = add_arp_table_entry(env->arp_tb, &body->arp_sip, &body->arp_sha);
+  if (res) return 0;
 
-  rte_pkt_mbuf_free(buf);
-  return 1;
+  rte_pktmbuf_free(buf);
+  return 0;
 }
 
-
-void
+int
 arp_input(struct lcore_env* env, struct rte_mbuf* buf)
 {
-  int res;
+  int res = 0;
   struct arp_hdr* arphdr;
-  arphdr = (struct arp_hdr *) (rte_pkt_mbuf_mtod(buf, char*) + buf->l2_len);
-  if (arphdr->hrd != ARP_HRD_ETHER) return ;
+  arphdr = (struct arp_hdr *) (rte_pktmbuf_mtod(buf, char*) + buf->l2_len);
+  if (arphdr->arp_hrd != ARP_HRD_ETHER) return 0;
   // XXX some other checks
 
   switch(arphdr->arp_op) {
     case ARP_OP_REQUEST: {
-      res = arp_request_process(env, arphdr);      
+      res = arp_request_process(env, buf, arphdr);
       break;
     }
     case ARP_OP_REPLY: {
-      res = arp_reply_process(env, arphdr);      
+      res = arp_reply_process(env, buf, arphdr);      
       break;
     }
   }

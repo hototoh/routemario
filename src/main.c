@@ -26,8 +26,15 @@
 #include <rte_mempool.h>
 #include <rte_malloc.h>
 
-#include "routemario.h"
 #include "fdb.h"
+#include "arp.h"
+#include "runtime.h"
+
+static int
+ip_input(struct lcore_env *env, struct rte_mbuf* buf)
+{
+    return 0;
+}
 
 #define mmalloc(x) rte_malloc("l2sw", (x), 0)
 #define mfree(x) rte_free((x))
@@ -37,7 +44,6 @@
 #define RTE_LOGTYPE_MARIO RTE_LOGTYPE_USER1
 
 #define MBUF_DATA_SIZE (2048 + RTE_PKTMBUF_HEADROOM)
-#define MAX_PKT_BURST 32
 #define BURST_TX_DRAIN_US 100 /* TX drain every ~100us */
 #define NB_MBUF   8192
 #define MAX_RX_QUEUE_PER_LCORE 16
@@ -50,11 +56,6 @@
 #define RTE_TEST_TX_DESC_DEFAULT 512
 static uint16_t nb_rxd = RTE_TEST_RX_DESC_DEFAULT;
 static uint16_t nb_txd = RTE_TEST_TX_DESC_DEFAULT;
-
-struct mbuf_table {
-	unsigned len;
-	struct rte_mbuf *m_table[MAX_PKT_BURST];
-};
 
 /*
 struct lcore_queue_conf {
@@ -184,7 +185,7 @@ l2sw_sending_packet(struct lcore_env *env, struct rte_mbuf *buf,
   
   if (unlikely(len == MAX_PKT_BURST)) {
     l2sw_send_burst(env, dst_port, len);
-    len == 0;
+    len = 0;
   }
   env->tx_mbufs[dst_port].len = len;
   return ;
@@ -231,28 +232,28 @@ ether_switching(struct lcore_env *env, struct rte_mbuf* buf,
 }
 
 static void
-ether_input(struct lcore_env *env, struct rte_mbuf** buf,
+ether_input(struct lcore_env *env, struct rte_mbuf** bufs,
             unsigned n_rx, uint8_t src_port)
 {
   for(uint32_t j = 0; j < n_rx; j++) {
-    int res;
-    struct rte_mbuf* pkt = pkt_burst[j];
+    int res = 0;
+    struct rte_mbuf* pkt = bufs[j];
     rte_prefetch0(rte_pktmbuf_mtod(pkt, void *));
     
     struct ether_hdr *eth = rte_pktmbuf_mtod(pkt, struct ether_hdr *);
-    RTE_LOG(INFO, MARIO, "%s\n\tl2_len: %lu\n\tl3_len\n\tl4_len:%lu\n",
-            pkt->l2_len, pkt->l3_len, pkt->l4_len);
+    RTE_LOG(INFO, MARIO, "%s\n\tl2_len: %d\n\tl3_len:%d\n\tl4_len:%d\n",
+            __func__, pkt->l2_len, pkt->l3_len, pkt->l4_len);
     pkt->l2_len = ETHER_HDR_LEN;
     switch (eth->ether_type) {
       case ETHER_TYPE_ARP: {
         res = arp_input(env, pkt);
         break;
       }
-      case ETHER_TYPE_IP: {
+      case ETHER_TYPE_IPv4: {
         res = ip_input(env, pkt);
         break;
       }
-      case ETHER_TYPE_v6: {
+      case ETHER_TYPE_IPv6: {
         ;
         break;
       }
@@ -267,7 +268,7 @@ ether_input(struct lcore_env *env, struct rte_mbuf** buf,
       continue;
     }
 
-    ether_switching(env, pkt, port_id);    
+    ether_switching(env, pkt, src_port);    
   }
 }
 
@@ -461,7 +462,7 @@ int
 main(int argc, char **argv)
 {
   //struct lcore_queue_conf *qconf = NULL;
-  struct rte_eth_dev_info dev_info;
+  //struct rte_eth_dev_info dev_info;
   struct lcore_env** envs;
   int ret;
   uint8_t n_ports;

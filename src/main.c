@@ -161,14 +161,11 @@ print_stats(struct lcore_env *env)
 }
 
 static void
-l2sw_send_burst(struct lcore_env* env, uint8_t dst_port, unsigned n)
+l2sw_send_burst(struct lcore_env* env, uint8_t dst_port, unsigned int n)
 {
   struct rte_mbuf **m_table;
-  unsigned ret;
-  unsigned queue_id;
-  
+  uint16_t ret;
   m_table = (struct rte_mbuf**)env->tx_mbufs[dst_port].m_table;
-  
   ret = rte_eth_tx_burst(dst_port, (uint16_t) env->lcore_id, m_table, n);
   port_statistics[dst_port].tx += ret;
   if (unlikely(ret < n)) {
@@ -189,7 +186,7 @@ l2sw_sending_packet(struct lcore_env *env, struct rte_mbuf *buf,
   
   if (unlikely(len == MAX_PKT_BURST)) {
     l2sw_send_burst(env, dst_port, len);
-    len == 0;
+    len = 0;
   }
   env->tx_mbufs[dst_port].len = len;
   return ;
@@ -214,7 +211,7 @@ l2sw_flooding(struct lcore_env *env, struct rte_mbuf *buf,
 }
 
 static void
-l2sw_simple_switching(struct lcore_env *env, struct rte_mbuf* buf,
+l2sw_switching(struct lcore_env *env, struct rte_mbuf* buf,
                       uint8_t src_port)
 {
   struct fdb_table *fdb = env->fdb;
@@ -230,7 +227,7 @@ l2sw_simple_switching(struct lcore_env *env, struct rte_mbuf* buf,
   } else {
     // XXX
     // must check expire & if so, flooding
-    dst_port = dst_entry->port;
+    dst_port = (uint8_t) dst_entry->port;
     l2sw_sending_packet(env, buf, src_port, dst_port);
   }
 }
@@ -284,7 +281,7 @@ l2sw_main_process(struct lcore_env *env)
 
     /* RX */
     for (uint8_t port_id = 0; port_id < n_ports; port_id++) {
-      unsigned n_rx = rte_eth_rx_burst(port_id, lcore_id,
+      unsigned n_rx = rte_eth_rx_burst(port_id, (uint16_t) lcore_id,
                                        pkt_burst, MAX_PKT_BURST);
       if (n_rx != 0)
         RTE_LOG(INFO, L2SW, "[%u-%u] %u packet(s) came.\n",
@@ -294,7 +291,7 @@ l2sw_main_process(struct lcore_env *env)
       for(uint32_t j = 0; j < n_rx; j++) {
         pkt = pkt_burst[j];
         rte_prefetch0(rte_pktmbuf_mtod(pkt, void *));
-        l2sw_simple_switching(env, pkt, port_id);
+        l2sw_switching(env, pkt, port_id);
       }
     }      
   }
@@ -305,7 +302,7 @@ static int
 l2sw_launch_one_lcore(void *env)
 {
 	RTE_LOG(INFO, L2SW, "[%u]processing launch\n", rte_lcore_id());
-  uint8_t lcore_id = rte_lcore_id();
+  uint8_t lcore_id = (uint8_t) rte_lcore_id();
 
   l2sw_main_process(((struct lcore_env**) env)[lcore_id]);
   
@@ -432,7 +429,7 @@ int
 main(int argc, char **argv)
 {
   //struct lcore_queue_conf *qconf = NULL;
-  struct rte_eth_dev_info dev_info;
+  // struct rte_eth_dev_info dev_info;
   struct lcore_env** envs;
   int ret;
   uint8_t n_ports;
@@ -516,7 +513,7 @@ main(int argc, char **argv)
 		/* init one RX queue */
     for (uint8_t core_id = 0; core_id < lcore_count; core_id++) {
       ret = rte_eth_rx_queue_setup(port_id, core_id, nb_rxd,
-                                   rte_eth_dev_socket_id(port_id),
+                                   (unsigned int)rte_eth_dev_socket_id(port_id),
                                    NULL,
                                    l2sw_pktmbuf_pool);
       if (ret < 0)
@@ -528,7 +525,8 @@ main(int argc, char **argv)
 		/* init one TX queue */
     for (uint8_t core_id = 0; core_id < lcore_count; core_id++) {
       ret = rte_eth_tx_queue_setup(port_id, core_id, nb_txd,
-                                   rte_eth_dev_socket_id(port_id), NULL);
+                                   (unsigned int)rte_eth_dev_socket_id(port_id),
+                                   NULL);
       if (ret < 0)
         rte_exit(EXIT_FAILURE, 
                  "rte_eth_tx_queue_setup:err=%d, port=%u queue=%u\n",

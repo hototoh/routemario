@@ -91,7 +91,7 @@ add_fdb_entry(struct fdb_table* table, const struct ether_addr* addr,
     struct fdb_entry *entry = &table->items[key];
     ether_addr_copy(addr, &entry->addr);
     entry->port = port;
-    entry->expire = EXPIRE_TIME;
+    entry->aging = AGING_TIME;
     return 0;
   }
 
@@ -117,7 +117,7 @@ remove_fdb_entry(struct fdb_table* table, const struct ether_addr* addr)
     struct fdb_entry *entry = &table->items[key];
     ether_addr_copy((struct ether_addr*) "000000", &entry->addr);
     entry->port = 0;
-    entry->expire = 0;
+    entry->aging = 0;
     
     return 0;
   }

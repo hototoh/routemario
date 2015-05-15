@@ -10,7 +10,7 @@
 #include <rte_hash.h>
 
 
-#define EXPIRE_TIME 3600
+#define AGING_TIME 3600
 
 
 struct fdb_entry {
@@ -18,11 +18,11 @@ struct fdb_entry {
   uint16_t port;
   /**
    * XXX:
-   * updating expire cause cache invalidation in other core.
+   * updating aging cause cache invalidation in other core.
    * so we had not better updating it !?
    * should be better to use rte_timer !?
    */
-  uint32_t expire; 
+  uint32_t aging; 
 };
 
 struct fdb_table {

@@ -28,53 +28,71 @@
 #include <rte_branch_prediction.h>
 #include <rte_byteorder.h>
 #include <rte_malloc.h>
+#include <rte_per_lcore.h>
 
 #include "util.h"
 #include "ipv4.h"
+#include "interfaces.h"
+#include "routemario.h"
+
+RTE_DEFINE_PER_LCORE(struct mbuf_queue, routing_queue);
 
 static int
-ip_routing(struct lcore_env *env, struct rte_mbuf *buf)
-{  
+ip_routing(struct mbuf_queue* routing_queue)
+{
+  
   return 0;
 }
 
 int
-ip_input(struct lcore_env *env, struct rte_mbuf *buf)
+ip_enqueue_routing_pkt(struct mbuf_queue* routing_queue, struct mbuf* buf)
 {
-  int res = 0;
-  struct ipv4_hdr *iphdr;
-  iphdr = (struct ipv4_hdr*) (rte_pktmbuf_mtod(buf, char *) + buf->l2_len);
   
-  buf->l3_len = (iphdr->version_ihl & IPV4_HDR_IHL_MASK) << 2;
-  (iphdr->time_to_live)--;
+}
 
-  if(is_own_ip_addr(iphdr->dst_addr)) {
-    switch(iphdr->next_proto_id) {
-      case IPPROTO_ICMP: {
-        res = icmp_input(env, buf);
-        break;
+void
+ip_rcv(struct rte_mbuf **bufs, uint16_t n_rx)
+{
+  for (uint16_t i = 0; i < n_rx; i++) {
+    int res = 0;
+    struct rte_mbuf *buf = bufs[i];
+    struct ipv4_hdr *iphdr;
+    struct l3_interfaces *intfs;
+    iphdr = (struct ipv4_hdr*) (rte_pktmbuf_mtod(buf, char *) + buf->l2_len);
+    buf->l3_len = (iphdr->version_ihl & IPV4_HDR_IHL_MASK) << 2;
+    
+    /* packets to this host. */
+    if(is_own_ip_addr(intfs, iphdr->dst_addr)) {
+      switch(iphdr->next_proto_id) {
+        case IPPROTO_ICMP: {
+          icmp_recv(buf);
+          break;
+        }
+        case IPPROTO_TCP: {
+          rte_pktmbuf_free(buf);
+          break;
+        }
+        case IPPROTO_UDP: {
+          rte_pktmbuf_free(buf);
+          break;
+        }
       }
-      case IPPROTO_TCP: {
-        ;
-        break;
-      }
-      case IPPROTO_UDP: {
-        ;
-        break;
-      }
+      continue;
     }
-  } else {
-    if(!(iphdr->time_to_live > 0)) {
-      send_icmp_time_exceeded(env, buf);
-      return 0;
+
+    /* packets to other hosts. */
+    /* check the TTL */
+    if((--(iphdr->time_to_live) <= 0)) {
+      icmp_send_time_exceeded(buf);
+      continue;
+    }
+
+    res = ip_enqueue_routing_pkt(get_mbuf_queue(), buf);
+    if (unlikely(res)) {
+      ip_routing(get_mbuf_queue());
     }
   }
-  
-  if (res) {  // if res is 1, packet already consumed.
-    rte_pktmbuf_free(buf);
-    return 1;
-  }
 
-  ip_routing(env, buf, iphdr);  
+  ip_routing(get_mbuf_queue());
   return 0;
 }

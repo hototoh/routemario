@@ -26,30 +26,28 @@
 #include <rte_mempool.h>
 #include <rte_malloc.h>
 
-#include "fdb.h"
-#include "arp.h"
-#include "runtime.h"
+#include "eth.h"
 
-static int
-ip_input(struct lcore_env *env, struct rte_mbuf* buf)
-{
-    return 0;
-}
-
-#define mmalloc(x) rte_malloc("l2sw", (x), 0)
+#define mmalloc(x) rte_malloc("rmario", (x), 0)
 #define mfree(x) rte_free((x))
-
-#define FDB_SIZE 1 << 20
 
 #define RTE_LOGTYPE_MARIO RTE_LOGTYPE_USER1
 
-#define MBUF_DATA_SIZE (2048 + RTE_PKTMBUF_HEADROOM)
 #define BURST_TX_DRAIN_US 100 /* TX drain every ~100us */
 #define NB_MBUF   8192
 #define MAX_RX_QUEUE_PER_LCORE 16
 #define MAX_RX_QUEUE_PER_LCORE 16
 
-/*
+#ifndef MAX_PKT_BURST
+#define MAX_PKT_BURST 32
+#endif
+
+/**
+ * Global variables
+ */
+
+
+/**
  * Configurable number of RX/TX ring descriptors
  */
 #define RTE_TEST_RX_DESC_DEFAULT 256
@@ -57,22 +55,17 @@ ip_input(struct lcore_env *env, struct rte_mbuf* buf)
 static uint16_t nb_rxd = RTE_TEST_RX_DESC_DEFAULT;
 static uint16_t nb_txd = RTE_TEST_TX_DESC_DEFAULT;
 
-/*
-struct lcore_queue_conf {
-	unsigned n_rx_port;
-	unsigned rx_port_list[MAX_RX_QUEUE_PER_LCORE];
-	struct mbuf_table tx_mbufs[RTE_MAX_ETHPORTS];
-} __rte_cache_aligned;
-struct lcore_queue_conf lcore_queue_conf[RTE_MAX_LCORE];
-*/
+/**
+ * RSS 
+ */
 #define RSS_HASH_KEY_LENGTH 40
 static uint8_t hash_key[RSS_HASH_KEY_LENGTH] = {
-0x6D, 0x5A, 0x6D, 0x5A, 0x6D, 0x5A, 0x6D, 0x5A,
   0x6D, 0x5A, 0x6D, 0x5A, 0x6D, 0x5A, 0x6D, 0x5A,
   0x6D, 0x5A, 0x6D, 0x5A, 0x6D, 0x5A, 0x6D, 0x5A,
   0x6D, 0x5A, 0x6D, 0x5A, 0x6D, 0x5A, 0x6D, 0x5A,
   0x6D, 0x5A, 0x6D, 0x5A, 0x6D, 0x5A, 0x6D, 0x5A,
-  };
+  0x6D, 0x5A, 0x6D, 0x5A, 0x6D, 0x5A, 0x6D, 0x5A,
+};
 
 static const struct rte_eth_conf port_conf = {
 	.rxmode = {
@@ -86,27 +79,31 @@ static const struct rte_eth_conf port_conf = {
 	},
   .rx_adv_conf = {
     .rss_conf = {
-.rss_key=hash_key,
-   .rss_hf = ETH_RSS_IP,
-   },
-       },
+      .rss_key=hash_key,
+      .rss_hf = ETH_RSS_IP,
+    },
+  },
 	.txmode = {
 		.mq_mode = ETH_MQ_TX_NONE,
 	},
 };
 
-struct l2sw_port_statistics {
+// #define PORT_STATS
+#ifdef PORT_STATS
+struct rmario_port_statistics {
 	uint64_t tx;
 	uint64_t rx;
 	uint64_t dropped;
 } __rte_cache_aligned;
 
 /* list of per-port statistics */
-struct l2sw_port_statistics port_statistics[RTE_MAX_ETHPORTS];
+struct rmario_port_statistics port_statistics[RTE_MAX_ETHPORTS];
+#endif
+
 /* ethernet addresses of ports */
-static struct ether_addr l2sw_ports_eth_addr[RTE_MAX_ETHPORTS];
-struct rte_mempool *l2sw_pktmbuf_pool = NULL;
-static unsigned int l2sw_rx_queue_per_lcore = RTE_MAX_ETHPORTS;
+static struct ether_addr rmario_ports_eth_addr[RTE_MAX_ETHPORTS];
+struct rte_mempool *rmario_pktmbuf_pool = NULL;
+static unsigned int rmario_rx_queue_per_lcore = RTE_MAX_ETHPORTS;
 
 #define TIMER_MILLISECOND 2000000ULL /* around 1ms at 2 Ghz */
 #define MAX_TIMER_PERIOD 86400 /* 1 day max */
@@ -114,8 +111,9 @@ static unsigned int l2sw_rx_queue_per_lcore = RTE_MAX_ETHPORTS;
 static int64_t timer_period = 5 * TIMER_MILLISECOND * 1000;
 
 /* Print out statistics on packets dropped */
+#ifdef PORT_STATS
 static void
-print_stats(struct lcore_env *env)
+print_stats()
 {
 	uint64_t total_packets_dropped, total_packets_tx, total_packets_rx;
 
@@ -155,125 +153,10 @@ print_stats(struct lcore_env *env)
 		   total_packets_dropped);
 	printf("\n====================================================\n");
 }
+#endif
 
 static void
-l2sw_send_burst(struct lcore_env* env, uint8_t dst_port, unsigned n)
-{
-  struct rte_mbuf **m_table;
-  unsigned ret;
-  unsigned queue_id;
-  
-  m_table = (struct rte_mbuf**)env->tx_mbufs[dst_port].m_table;
-  
-  ret = rte_eth_tx_burst(dst_port, (uint16_t) env->lcore_id, m_table, n);
-  port_statistics[dst_port].tx += ret;
-  if (unlikely(ret < n)) {
-    port_statistics[dst_port].dropped += (n - ret);
-    do {
-      rte_pktmbuf_free(m_table[ret]);
-    } while(++ret < n);
-  }
-  return ;
-}
-
-static void
-l2sw_sending_packet(struct lcore_env *env, struct rte_mbuf *buf,
-                    uint8_t src_port , uint8_t dst_port)
-{
-  unsigned len = env->tx_mbufs[dst_port].len;
-  env->tx_mbufs[dst_port].m_table[len++] = buf;
-  
-  if (unlikely(len == MAX_PKT_BURST)) {
-    l2sw_send_burst(env, dst_port, len);
-    len = 0;
-  }
-  env->tx_mbufs[dst_port].len = len;
-  return ;
-}
-
-static void
-l2sw_flooding(struct lcore_env *env, struct rte_mbuf *buf,
-              uint8_t src_port)
-{
-  uint8_t n = env->n_port;
-  uint8_t i = 0;
-  
-  for (uint8_t port_id = 0; port_id < n; port_id++) {
-    struct rte_mbuf *buff;
-    if (port_id == src_port) continue;
-    if (++i != n-1)
-      buff = rte_pktmbuf_clone(buf, l2sw_pktmbuf_pool);
-    else
-      buff = buf;
-    l2sw_sending_packet(env, buff, src_port, port_id);
-  }
-}
-
-static void
-ether_switching(struct lcore_env *env, struct rte_mbuf* buf,
-               uint8_t src_port)
-{
-  struct fdb_table *fdb = env->fdb;
-  struct fdb_entry *dst_entry;
-  struct ether_hdr *eth;
-  uint8_t dst_port;
-
-	eth = rte_pktmbuf_mtod(buf, struct ether_hdr *);
-  dst_entry = lookup_fdb_entry(fdb, &eth->d_addr);
-  add_fdb_entry(fdb, &eth->s_addr, src_port);;
-  if (dst_entry == NULL) {
-    l2sw_flooding(env, buf, src_port);
-  } else {
-    // XXX
-    // must check expire & if so, flooding
-    dst_port = dst_entry->port;
-    l2sw_sending_packet(env, buf, src_port, dst_port);
-  }
-}
-
-static void
-ether_input(struct lcore_env *env, struct rte_mbuf** bufs,
-            unsigned n_rx, uint8_t src_port)
-{
-  for(uint32_t j = 0; j < n_rx; j++) {
-    int res = 0;
-    struct rte_mbuf* pkt = bufs[j];
-    rte_prefetch0(rte_pktmbuf_mtod(pkt, void *));
-    
-    struct ether_hdr *eth = rte_pktmbuf_mtod(pkt, struct ether_hdr *);
-    RTE_LOG(INFO, MARIO, "%s\n\tl2_len: %d\n\tl3_len:%d\n\tl4_len:%d\n",
-            __func__, pkt->l2_len, pkt->l3_len, pkt->l4_len);
-    pkt->l2_len = ETHER_HDR_LEN;
-    switch (eth->ether_type) {
-      case ETHER_TYPE_ARP: {
-        res = arp_input(env, pkt);
-        break;
-      }
-      case ETHER_TYPE_IPv4: {
-        res = ip_input(env, pkt);
-        break;
-      }
-      case ETHER_TYPE_IPv6: {
-        ;
-        break;
-      }
-    }
-
-    /**
-     * If ret is 0, need to l2-switching.
-     * Or no need any more processing.
-     */
-    if (res) {
-      // consumed
-      continue;
-    }
-
-    ether_switching(env, pkt, src_port);    
-  }
-}
-
-static void
-l2sw_main_process(struct lcore_env *env)
+rmario_main_process(void)
 {
   struct rte_mbuf *pkt_burst[MAX_PKT_BURST];
   uint8_t n_ports = rte_eth_dev_count();
@@ -294,24 +177,22 @@ l2sw_main_process(struct lcore_env *env)
       for(uint8_t port_id = 0; port_id < n_ports; port_id++) {
 				if (env->tx_mbufs[port_id].len == 0)
 					continue;
-				l2sw_send_burst(env, port_id, env->tx_mbufs[port_id].len);
+				rmario_send_burst(env, port_id, env->tx_mbufs[port_id].len);
 				env->tx_mbufs[port_id].len = 0;
       }
 
-			/* if timer is enabled */
-			if (timer_period > 0) {
-				/* advance the timer */
-				timer_tsc += diff_tsc;
-				/* if timer has reached its timeout */
-				if (unlikely(timer_tsc >= (uint64_t) timer_period)) {
-					/* do this only on master core */
-					if (lcore_id == rte_get_master_lcore()) {
+#ifdef PORT_STATS			
+			if (timer_period > 0) { /* if timer is enabled */
+				timer_tsc += diff_tsc; /* advance the timer */
+        // if timer has reached its timeout
+				if (unlikely(timer_tsc >= (uint64_t) timer_period)) { 
+					if (lcore_id == rte_get_master_lcore()) { /* do this only on master core */
 						print_stats(env);
-						/* reset the timer */
-						timer_tsc = 0;
+						timer_tsc = 0; // reset the timer 
 					}
 				}
 			}
+#endif
       prev_tsc = cur_tsc;
     }
 
@@ -323,27 +204,29 @@ l2sw_main_process(struct lcore_env *env)
         RTE_LOG(INFO, MARIO, "[%u-%u] %u packet(s) came.\n",
                 lcore_id, port_id,  n_rx);
 
+#ifdef PORT_STATS
       __sync_fetch_and_add(&port_statistics[port_id].rx, n_rx);
-
-      ether_input(env, pkt_burst, n_rx, port_id);
+#endif
+      ether_input(pkt_burst, n_rx, port_id);
     }
   }
   return ;
 }
 
 static int
-l2sw_launch_one_lcore(void *env)
+rmario_launch_one_lcore(void)
 {
 	RTE_LOG(INFO, MARIO, "[%u]processing launch\n", rte_lcore_id());
-  uint8_t lcore_id = rte_lcore_id();
 
-  l2sw_main_process(((struct lcore_env**) env)[lcore_id]);
+  // decide the number of this core-pooling queue.
+  set_nic_queue_id(rte_lcore_id());
+  rmario_main_process();
   
 	return 0;
 }
 
 static void
-l2sw_usage(const char *prgname)
+rmario_usage(const char *prgname)
 {
 	printf("%s [EAL options] -- -p PORTMASK [-q NQ]\n"
 	       "  -q NQ: number of queue (=ports) per lcore (default is 1)\n",
@@ -351,7 +234,7 @@ l2sw_usage(const char *prgname)
 }
 
 static unsigned int
-l2sw_parse_nqueue(const char *q_arg)
+rmario_parse_nqueue(const char *q_arg)
 {
 	char *end = NULL;
 	unsigned long n;
@@ -369,7 +252,7 @@ l2sw_parse_nqueue(const char *q_arg)
 }
 
 static int
-l2sw_parse_args(int argc, char **argv)
+rmario_parse_args(int argc, char **argv)
 {
   int opt, ret;
   char **argvopt;
@@ -385,14 +268,14 @@ l2sw_parse_args(int argc, char **argv)
         != EOF){
     switch (opt) {
       case 'q':
-        l2sw_rx_queue_per_lcore = l2sw_parse_nqueue(optarg);
-        if (l2sw_rx_queue_per_lcore == 0) {
+        rmario_rx_queue_per_lcore = rmario_parse_nqueue(optarg);
+        if (rmario_rx_queue_per_lcore == 0) {
           RTE_LOG(ERR, MARIO, "Invalid queue number\n");
           return -1;
         }
         break;
       default:
-        l2sw_usage(prgname);
+        rmario_usage(prgname);
         return -1;
     }
   }
@@ -458,11 +341,12 @@ check_all_ports_link_status(uint8_t port_num)
 	}
 }
 
+#define FDB_SIZE 1 << 20
+#define MBUF_DATA_SIZE (2048 + RTE_PKTMBUF_HEADROOM)
+
 int
 main(int argc, char **argv)
 {
-  //struct lcore_queue_conf *qconf = NULL;
-  //struct rte_eth_dev_info dev_info;
   struct lcore_env** envs;
   int ret;
   uint8_t n_ports;
@@ -475,7 +359,7 @@ main(int argc, char **argv)
   argc -= ret;
   argv += ret;
 
-  ret = l2sw_parse_args(argc, argv);
+  ret = rmario_parse_args(argc, argv);
   if (ret < 0)
     rte_exit(EXIT_FAILURE, "Invalid MARIO arguments\n");
 
@@ -483,10 +367,10 @@ main(int argc, char **argv)
   n_ports = rte_eth_dev_count();
   RTE_LOG(INFO, MARIO, "Find %u logical cores\n" , lcore_count);
 
-  l2sw_pktmbuf_pool = rte_pktmbuf_pool_create("mbuf_pool", NB_MBUF, 32, 0,
+  rmario_pktmbuf_pool = rte_pktmbuf_pool_create("mbuf_pool", NB_MBUF, 32, 0,
                                               MBUF_DATA_SIZE, 
                                               rte_socket_id());
-  if (l2sw_pktmbuf_pool == NULL)
+  if (rmario_pktmbuf_pool == NULL)
     rte_exit(EXIT_FAILURE, "Cannot init mbuf pool\n");
 
   n_ports = rte_eth_dev_count();
@@ -541,14 +425,14 @@ main(int argc, char **argv)
 			rte_exit(EXIT_FAILURE, "Cannot configure device: err=%d, port=%u\n",
                ret, (unsigned)port_id);
     RTE_LOG(INFO, MARIO, "done\n");
-		rte_eth_macaddr_get(port_id, &l2sw_ports_eth_addr[port_id]);
+		rte_eth_macaddr_get(port_id, &rmario_ports_eth_addr[port_id]);
 
 		/* init one RX queue */
     for (uint8_t core_id = 0; core_id < lcore_count; core_id++) {
       ret = rte_eth_rx_queue_setup(port_id, core_id, nb_rxd,
                                    rte_eth_dev_socket_id(port_id),
                                    NULL,
-                                   l2sw_pktmbuf_pool);
+                                   rmario_pktmbuf_pool);
       if (ret < 0)
         rte_exit(EXIT_FAILURE, 
                  "rte_eth_rx_queue_setup:err=%d, port=%u queue=%u\n",
@@ -576,12 +460,12 @@ main(int argc, char **argv)
     RTE_LOG(INFO, MARIO,
             "Port %u, MAC address %02x:%02x:%02x:%02x:%02x:%02x\n\n",
             port_id,
-            l2sw_ports_eth_addr[port_id].addr_bytes[0],
-            l2sw_ports_eth_addr[port_id].addr_bytes[1],
-            l2sw_ports_eth_addr[port_id].addr_bytes[2],
-            l2sw_ports_eth_addr[port_id].addr_bytes[3],
-            l2sw_ports_eth_addr[port_id].addr_bytes[4],
-            l2sw_ports_eth_addr[port_id].addr_bytes[5]);
+            rmario_ports_eth_addr[port_id].addr_bytes[0],
+            rmario_ports_eth_addr[port_id].addr_bytes[1],
+            rmario_ports_eth_addr[port_id].addr_bytes[2],
+            rmario_ports_eth_addr[port_id].addr_bytes[3],
+            rmario_ports_eth_addr[port_id].addr_bytes[4],
+            rmario_ports_eth_addr[port_id].addr_bytes[5]);
             
     memset(&port_statistics, 0, sizeof(port_statistics));
   }
@@ -589,7 +473,7 @@ main(int argc, char **argv)
 	check_all_ports_link_status(n_ports);
 
 	/* launch per-lcore init on every lcore */
-  rte_eal_mp_remote_launch(l2sw_launch_one_lcore, envs, CALL_MASTER);
+  rte_eal_mp_remote_launch(rmario_launch_one_lcore, CALL_MASTER);
   {
     uint8_t lcore_id;
     RTE_LCORE_FOREACH_SLAVE(lcore_id) {

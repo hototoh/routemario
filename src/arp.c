@@ -30,11 +30,9 @@
 
 #include "util.h"
 #include "arp.h"
-#include "runtime.h"
 
 #define mmalloc(x) rte_malloc("fdb", (x), 0)
 #define mfree(x) rte_free((x))
-
 
 #define RTE_LOGTYPE_ARP_TABLE RTE_LOGTYPE_USER1
 
@@ -177,8 +175,8 @@ lookup_bulk_arp_table_entries(struct arp_table *table,
 }
 
 static int
-arp_request_process(struct lcore_env* env, struct rte_mbuf* buf,
-                    struct arp_hdr* arphdr)
+arp_request_process(struct rte_mbuf* buf, struct arp_hdr* arphdr)
+                    
 {
   int res;
   struct ether_hdr*eth;
@@ -208,8 +206,8 @@ arp_request_process(struct lcore_env* env, struct rte_mbuf* buf,
 }
 
 static int
-arp_reply_process(struct lcore_env* env, struct rte_mbuf* buf,
-                  struct arp_hdr* arphdr)
+arp_reply_process(struct rte_mbuf* buf, struct arp_hdr* arphdr)
+                  
 {
   int res;
   struct ether_addr etheraddr;
@@ -226,7 +224,7 @@ arp_reply_process(struct lcore_env* env, struct rte_mbuf* buf,
 }
 
 int
-arp_input(struct lcore_env* env, struct rte_mbuf* buf)
+arp_rcv(struct rte_mbuf* buf)
 {
   int res = 0;
   struct arp_hdr* arphdr;
@@ -243,7 +241,5 @@ arp_input(struct lcore_env* env, struct rte_mbuf* buf)
       res = arp_reply_process(env, buf, arphdr);      
       break;
     }
-  }
-  
-  return res;
+  }  
 }

@@ -12,10 +12,9 @@
 #include <rte_mbuf.h>
 #define ARP_TABLE_EXPIRE_TIME 300
 
-struct lcore_env;
-
 struct arp_table_entry {
   struct ether_addr eth_addr;
+  uint16_t vlan_id;
   uint32_t ip_addr;
   uint32_t expire;
 };
@@ -48,6 +47,6 @@ lookup_bulk_arp_table_entries(struct arp_table *talbe,
                               struct arp_table_entry** entries);
 
 int
-arp_input(struct lcore_env* env, struct rte_mbuf* buf);
+arp_rcv(struct rte_mbuf* buf);
 
 #endif

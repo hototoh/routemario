@@ -7,6 +7,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include <errno.h>
 
 #include <rte_config.h>
@@ -14,6 +15,8 @@
 #include <rte_mbuf.h>
 #include <rte_malloc.h>
 #include <rte_log.h>
+
+#include "mbuf_queue.h"
 
 #define RTE_LOGTYPE_MBUF_Q RTE_LOGTYPE_USER1
 

@@ -17,7 +17,7 @@ struct l3_interfaces {
   uint16_t len;
   uint16_t max;
   struct l3_interface list[0];
-}
+};
 
 struct l3_interfaces*
 create_l3_interfaces(uint16_t len);
@@ -25,7 +25,7 @@ create_l3_interfaces(uint16_t len);
 void
 destroy_l3_interfaces(struct l3_interfaces *l3ifs);
 
-inline void
+void
 set_l3_interfaces(struct l3_interface *l3if, const uint16_t vlan_id,
                   const struct ether_addr *addr, const uint32_t ip_addr,
                   const uint32_t ip_mask,  const uint8_t port_id);

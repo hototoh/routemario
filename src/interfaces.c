@@ -24,7 +24,7 @@
 #define mmalloc(x) rte_malloc("L3IF", (x), 0)
 #define mfree(x) rte_free((x))
 
-struct l3_interfaceso*
+struct l3_interfaces*
 create_l3_interfaces(uint16_t len)
 {
   struct l3_interfaces *l3_ifs;
@@ -47,7 +47,7 @@ destroy_l3_interfaces(struct l3_interfaces *l3_ifs)
   mfree(l3_ifs);
 }
 
-inline void
+void
 set_l3_interfaces(struct l3_interface *l3if, const uint16_t vlan_id,
                   const struct ether_addr *addr, const uint32_t ip_addr,
                   const uint32_t ip_mask,  const uint8_t port_id)
@@ -62,8 +62,10 @@ int
 is_own_ip_addr(struct l3_interfaces *l3ifs, uint32_t addr)
 {
   uint16_t len = l3ifs->len;  
+  struct l3_interface *l3_list = l3ifs->list;
   for(uint16_t i = 0; i < len; i++) {
-    if((l3ifs->list[i])->ip_addr == addr) return 1;
+    struct l3_interface *l3if = &l3_list[i];
+    if(!(l3if->ip_addr ^ addr)) return 1;
   }
   return 0;
 }
@@ -71,9 +73,11 @@ is_own_ip_addr(struct l3_interfaces *l3ifs, uint32_t addr)
 int
 is_own_subnet(struct l3_interfaces *l3ifs, uint32_t addr)
 {
-  uint16_t len = l3ifs->len;  
+  uint16_t len = l3ifs->len;
+  struct l3_interface *l3_list = l3ifs->list;
   for(uint16_t i = 0; i < len; i++) {
-    if(!(((l3ifs->list[i])->ip_addr ^ addr) & mask)) return 1;
+    struct l3_interface *l3if = &l3_list[i];
+    if(!((l3if->ip_addr ^ addr) & l3if->ip_mask)) return 1;
   }
   return 0;
 }

@@ -24,6 +24,8 @@
 #define mmalloc(x) rte_malloc("L3IF", (x), 0)
 #define mfree(x) rte_free((x))
 
+struct l3_interfaces *intfs;
+
 struct l3_interfaces*
 create_l3_interfaces(uint16_t len)
 {

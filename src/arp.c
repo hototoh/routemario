@@ -30,13 +30,15 @@
 
 #include "util.h"
 #include "interfaces.h"
-#include "global_mario.h"
 #include "arp.h"
+#include "global_mario.h"
 
 #define mmalloc(x) rte_malloc("fdb", (x), 0)
 #define mfree(x) rte_free((x))
 
 #define RTE_LOGTYPE_ARP_TABLE RTE_LOGTYPE_USER1
+
+struct arp_table *arp_tb;
 
 struct arp_table*
 create_arp_table(uint32_t _size)

@@ -27,6 +27,7 @@
 #include <rte_malloc.h>
 
 #include "eth.h"
+#include "global_mario.h"
 
 #define mmalloc(x) rte_malloc("rmario", (x), 0)
 #define mfree(x) rte_free((x))

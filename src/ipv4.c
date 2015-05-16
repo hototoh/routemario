@@ -100,7 +100,7 @@ ip_rcv(struct rte_mbuf **bufs, uint16_t n_rx)
     /* packets to other hosts. */
     /* check the TTL */
     if((--(iphdr->time_to_live) <= 0)) {
-      icmp_send_time_exceeded(buf);
+      icmp_send_time_exceeded(buf, iphdr->dst_addr);
       continue;
     }
 

@@ -12,7 +12,7 @@
 #include <netinet/ip_icmp.h>
 
 #include <rte_config.h>
-#include <rte_common.h
+#include <rte_common.h>
 #include <rte_mbuf.h>
 #include <rte_ip.h>
 #include <rte_icmp.h>
@@ -40,7 +40,7 @@ calc_checksum(uint16_t *buf, uint32_t len)
   sum = (sum & 0xffff) + (sum >> 16);
   sum = (sum & 0xffff) + (sum >> 16);
 
-  return ~sum;
+  return (uint16_t) ~sum;
 }
 
 void
@@ -67,7 +67,7 @@ icmp_proc_echo(struct rte_mbuf *buf, struct icmp_hdr *icmphdr)
 {
   struct ipv4_hdr *iphdr;
   iphdr = (struct ipv4_hdr*) rte_pktmbuf_mtod(buf, char*) + buf->l2_len;
-  uint32_t data_len = iphdr->total_length - buf->l3_len;
+  uint32_t data_len = (uint32_t) (iphdr->total_length - buf->l3_len);
 
   icmphdr->icmp_type = ICMP_ECHOREPLY;
   icmphdr->icmp_code = 0;

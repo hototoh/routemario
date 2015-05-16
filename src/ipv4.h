@@ -11,13 +11,6 @@
 
 #include "mbuf_queue.h"
 
-RTE_DECLARE_PER_LCORE(struct mbuf_queue*, routing_queue);
-
-static inline struct mbuf_queue*
-get_routing_Q() {
-  return RTE_PER_LCORE(routing_queue);
-}
-
 void
 ip_rcv(struct rte_mbuf **buf, uint16_t n_rx);
 
@@ -29,7 +22,7 @@ void
 ip_output(uint32_t dst, uint32_t src, struct rte_mbuf* buf);
 
 int
-ip_enqueue_routing_pkt(struct mbuf_queue* routing_queue, struct mbuf* buf);
+ip_enqueue_routing_pkt(struct mbuf_queue* routing_queue, struct rte_mbuf* buf);
 
 
 #endif

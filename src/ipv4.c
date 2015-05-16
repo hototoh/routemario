@@ -35,33 +35,39 @@
 #include "interfaces.h"
 #include "mbuf_queue.h"
 #include "ipv4.h"
+#include "icmp.h"
+#include "global_mario.h"
 
 RTE_DEFINE_PER_LCORE(struct mbuf_queue*, routing_queue);
+
+static inline struct mbuf_queue*
+get_routing_Q() {
+  return RTE_PER_LCORE(routing_queue);
+}
 
 static int
 ip_routing(struct mbuf_queue* routing_queue)
 {
   struct rte_mbuf **queue = routing_queue->queue;
-  uint16_t len = queue->len;
+  uint16_t len = routing_queue->len;
 
   for (uint16_t i = 0; i < len; i++) {
-    struct rte_mbuf *m = queue[i];
+    struct rte_mbuf *buf = queue[i];
     struct ipv4_hdr *iphdr;
     iphdr = (struct ipv4_hdr*) rte_pktmbuf_mtod(buf, char*) + buf->l2_len;
                                  
     uint32_t dst = iphdr->dst_addr;
-    // XXX
+    // XXX after impleneting fib
   }
-
   return 0;
 }
 
-static int
-ip_enqueue_routing_pkt(struct mbuf_queue* routing_queue, struct mbuf* buf)
+int
+ip_enqueue_routing_pkt(struct mbuf_queue* routing_queue, struct rte_mbuf* buf)
 {
-  struct mbuf_queue *routing_queue = get_routing_Q();
-  routing_queue->queue[routing_queue->len++] = buf;  
-  return len == MAX_PKT_BURST ? 1 : 0;
+  struct mbuf_queue *r_queue = get_routing_Q();
+  r_queue->queue[r_queue->len++] = buf;  
+  return r_queue->len == r_queue->max ? 1 : 0;
 }
 
 void
@@ -79,7 +85,7 @@ ip_rcv(struct rte_mbuf **bufs, uint16_t n_rx)
     if(is_own_ip_addr(intfs, iphdr->dst_addr)) {
       switch(iphdr->next_proto_id) {
         case IPPROTO_ICMP: {
-          icmp_recv(buf);
+          icmp_rcv(buf);
           break;
         }
         case IPPROTO_TCP: {

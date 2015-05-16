@@ -38,12 +38,9 @@
 #include "icmp.h"
 #include "global_mario.h"
 
-RTE_DEFINE_PER_LCORE(struct mbuf_queue*, routing_queue);
+#define RTE_LOGTYPE_IPV4 RTE_LOGTYPE_USER1
 
-static inline struct mbuf_queue*
-get_routing_Q() {
-  return RTE_PER_LCORE(routing_queue);
-}
+RTE_DEFINE_PER_LCORE(struct mbuf_queue*, routing_queue);
 
 static int
 ip_routing(struct mbuf_queue* routing_queue)
@@ -86,15 +83,15 @@ ip_rcv(struct rte_mbuf **bufs, uint16_t n_rx)
       switch(iphdr->next_proto_id) {
         case IPPROTO_ICMP: {
           icmp_rcv(buf);
-          break;
+          continue;
         }
         case IPPROTO_TCP: {
           rte_pktmbuf_free(buf);
-          break;
+          continue;
         }
         case IPPROTO_UDP: {
           rte_pktmbuf_free(buf);
-          break;
+          continue;
         }
       }
       continue;

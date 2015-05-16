@@ -27,26 +27,6 @@
 RTE_DEFINE_PER_LCORE(struct mbuf_queue **, eth_tx_queue);
 RTE_DEFINE_PER_LCORE(uint16_t, nic_queue_id);
 
-static inline struct mbuf_queue**
-get_eth_tx_Qs() {
-  return RTE_PER_LCORE(eth_tx_queue);
-}
-
-static inline struct mbuf_queue*
-get_eth_tx_Q(uint8_t port_id) {
-  return (RTE_PER_LCORE(eth_tx_queue))[port_id];
-}
-
-static inline uint16_t
-get_nic_queue_id() {
-  return RTE_PER_LCORE(nic_queue_id);
-}
-
-static inline void
-set_nic_queue_id(uint16_t queue_id) {
-  RTE_PER_LCORE(nic_queue_id) = queue_id;
-}
-
 void
 eth_queue_xmit(uint8_t dst_port, uint16_t n)
 {

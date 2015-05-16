@@ -176,10 +176,11 @@ rmario_main_process(void)
     diff_tsc = cur_tsc - prev_tsc;
     if (unlikely(diff_tsc > drain_tsc)) {
       for(uint8_t port_id = 0; port_id < n_ports; port_id++) {
-				if (env->tx_mbufs[port_id].len == 0)
-					continue;
-				rmario_send_burst(env, port_id, env->tx_mbufs[port_id].len);
-				env->tx_mbufs[port_id].len = 0;
+        uint16_t len = (get_eth_tx_Q(port_id))->len;
+				if (len == 0) continue;
+
+				eth_queue_xmit(port_id, len);
+        (get_eth_tx_Q(port_id))->len = 0;
       }
 
 #ifdef PORT_STATS			
@@ -208,7 +209,7 @@ rmario_main_process(void)
 #ifdef PORT_STATS
       __sync_fetch_and_add(&port_statistics[port_id].rx, n_rx);
 #endif
-      ether_input(pkt_burst, n_rx, port_id);
+      eth_input(pkt_burst, n_rx, port_id);
     }
   }
   return ;
@@ -348,7 +349,6 @@ check_all_ports_link_status(uint8_t port_num)
 int
 main(int argc, char **argv)
 {
-  struct lcore_env** envs;
   int ret;
   uint8_t n_ports;
   unsigned lcore_count;
@@ -394,28 +394,6 @@ main(int argc, char **argv)
     ;
   }
   */
-
-  /* Initialize lcore_env */
-  envs = (struct lcore_env**) mmalloc(sizeof(struct lcore_env*));
-  if (envs == NULL) 
-    rte_exit(EXIT_FAILURE, "Cannot allocate memory for core envs\n");
-
-  fdb = create_fdb_table(FDB_SIZE);
-  if (fdb == NULL) 
-    rte_exit(EXIT_FAILURE, "Fail to create fdb\n");
-  for (uint8_t lcore_id = 0; lcore_id < lcore_count; lcore_id++) {
-    struct lcore_env* env;
-    env = (struct lcore_env*) mmalloc(sizeof(struct lcore_env) +
-                                      sizeof(struct mbuf_table) *n_ports);
-    if (env == NULL) 
-      rte_exit(EXIT_FAILURE, 
-               "Cannot allocate memory for %u core env\n", lcore_id);
-    env->n_port = n_ports;
-    env->lcore_id = lcore_id;
-    env->fdb = fdb;
-    memset(env->tx_mbufs, 0, sizeof(struct mbuf_table) * n_ports);
-    envs[lcore_id] = env;
-  }
 
 	/* Initialise each port */
   for(uint8_t port_id = 0; port_id < n_ports; port_id++) {
@@ -468,14 +446,15 @@ main(int argc, char **argv)
             rmario_ports_eth_addr[port_id].addr_bytes[3],
             rmario_ports_eth_addr[port_id].addr_bytes[4],
             rmario_ports_eth_addr[port_id].addr_bytes[5]);
-            
+#ifdef PORT_STATS
     memset(&port_statistics, 0, sizeof(port_statistics));
+#endif
   }
 
 	check_all_ports_link_status(n_ports);
 
 	/* launch per-lcore init on every lcore */
-  rte_eal_mp_remote_launch(rmario_launch_one_lcore, CALL_MASTER);
+  rte_eal_mp_remote_launch(rmario_launch_one_lcore, NULL, CALL_MASTER);
   {
     uint8_t lcore_id;
     RTE_LCORE_FOREACH_SLAVE(lcore_id) {

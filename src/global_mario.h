@@ -34,7 +34,6 @@ static inline void
 set_nic_queue_id(uint16_t queue_id) {
   RTE_PER_LCORE(nic_queue_id) = queue_id;
 }
-
 extern struct fdb_table *fdb_tb;
 
 /* ipv4.h */
@@ -43,7 +42,6 @@ static inline struct mbuf_queue*
 get_routing_Q() {
   return RTE_PER_LCORE(routing_queue);
 }
-
 
 /* interfaces.h */
 extern struct l3_interfaces *intfs;

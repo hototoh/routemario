@@ -25,29 +25,43 @@
 #include <rte_random.h>
 #include <rte_lcore.h>
 #include <rte_ring.h>
+#include <rte_ip.h>
 #include <rte_branch_prediction.h>
 #include <rte_byteorder.h>
 #include <rte_malloc.h>
 #include <rte_per_lcore.h>
 
 #include "util.h"
-#include "ipv4.h"
 #include "interfaces.h"
-#include "routemario.h"
+#include "mbuf_queue.h"
+#include "ipv4.h"
 
-RTE_DEFINE_PER_LCORE(struct mbuf_queue, routing_queue);
+RTE_DEFINE_PER_LCORE(struct mbuf_queue*, routing_queue);
 
 static int
 ip_routing(struct mbuf_queue* routing_queue)
 {
-  
+  struct rte_mbuf **queue = routing_queue->queue;
+  uint16_t len = queue->len;
+
+  for (uint16_t i = 0; i < len; i++) {
+    struct rte_mbuf *m = queue[i];
+    struct ipv4_hdr *iphdr;
+    iphdr = (struct ipv4_hdr*) rte_pktmbuf_mtod(buf, char*) + buf->l2_len;
+                                 
+    uint32_t dst = iphdr->dst_addr;
+    // XXX
+  }
+
   return 0;
 }
 
-int
+static int
 ip_enqueue_routing_pkt(struct mbuf_queue* routing_queue, struct mbuf* buf)
 {
-  
+  struct mbuf_queue *routing_queue = get_routing_Q();
+  routing_queue->queue[routing_queue->len++] = buf;  
+  return len == MAX_PKT_BURST ? 1 : 0;
 }
 
 void
@@ -87,12 +101,18 @@ ip_rcv(struct rte_mbuf **bufs, uint16_t n_rx)
       continue;
     }
 
-    res = ip_enqueue_routing_pkt(get_mbuf_queue(), buf);
-    if (unlikely(res)) {
-      ip_routing(get_mbuf_queue());
+    /* this includes other ports subnet */
+    if(is_own_subnet(intfs, iphdr->dst_addr)) {
+      eth_enqueue_tx_pkt(buf);
+      continue;
     }
-  }
 
-  ip_routing(get_mbuf_queue());
-  return 0;
+    res = ip_enqueue_routing_pkt(get_routing_Q(), buf);
+    if (unlikely(res)) {
+      ip_routing(get_routing_Q());
+    }
+  }  
+  
+  ip_routing(get_routing_Q());
+  return ;
 }

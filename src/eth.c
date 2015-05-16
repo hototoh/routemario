@@ -12,22 +12,19 @@
 #include <rte_per_lcore.h>
 #include "arp.h"
 
-RTE_DEFINE_PER_LCORE(struct mbuf_queue, eth_tx_queue[MAX_PORT]);
+RTE_DEFINE_PER_LCORE(struct mbuf_queue*, eth_tx_queue);
 RTE_DEFINE_PER_LCORE(uint16_t, nic_queue_id);
 
 void
-eth_queue_xmit(uint8_t dst_port, unsigned n)
+eth_queue_xmit(uint8_t dst_port, uint16_t n)
 {
-  struct rte_mbuf **m_table = (get_eth_tx_queue())[dst_port]->m_table;
-  unsigned ret;
-  unsigned queue_id;
+  struct rte_mbuf **queue = (get_eth_tx_Q())[dst_port]->queue;
+  uint16_t ret;
   
-  ret = rte_eth_tx_burst(dst_port, nic_queue_id, m_table, n);
-  //port_statistics[dst_port].tx += ret;
+  ret = rte_eth_tx_burst(dst_port, get_nic_queue_id(), queue, n);
   if (unlikely(ret < n)) {
-    //port_statistics[dst_port].dropped += (n - ret);
     do {
-      rte_pktmbuf_free(m_table[ret]);
+      rte_pktmbuf_free(queue[ret]);
     } while(++ret < n);
   }
   return ;
@@ -36,11 +33,11 @@ eth_queue_xmit(uint8_t dst_port, unsigned n)
 static void
 __eth_enqueue_tx_pkt(struct rte_mbuf *buf, uint8_t dst_port)
 {
-  struct mbuf_queue* tx_queue = (get_eth_tx_queue())[dst_port];
-  unsigned len = tx_queue->len;
+  struct mbuf_queue* tx_queue = (get_eth_tx_Q())[dst_port];
+  uint16_t len = tx_queue->len;
   tx_queue[dst_port].m_table[len++] = buf;
   
-  if (unlikely(len == MAX_PKT_BURST)) {
+  if (unlikely(len == tx_queue->max)) {
     eth_queue_xmit(dst_port, len);
     len = 0;
   }

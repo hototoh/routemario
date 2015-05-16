@@ -1,15 +1,14 @@
+/**
+ * routemario.h: RouteMario's 
+ * Declare global variables.
+ *
+ */
+
 #ifndef ROUTEMARIO_H
 #define ROUTEMARIO_H
 
 #include <stdint.h>
 #include <rte_ether.h>
-
-struct l3_interface {
-  uint16_t vlan_id;
-  struct ether_addr mac;
-  uint32_t ip_addr;
-  uint8_t port_id;
-};
 
 struct arp_table_entry;
 struct fib_entry {

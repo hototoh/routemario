@@ -12,4 +12,6 @@ int icmp_rcv(struct rte_mbuf *buf);
 
 int icmp_send(struct rte_mbuf *buf);
 
+void icmp_send_time_exceeded(struct rte_mbuf *buf);
+
 #endif

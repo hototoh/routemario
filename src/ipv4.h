@@ -9,12 +9,13 @@
 #include <rte_mbuf.h>
 #include <rte_lcore.h>
 
+#include "mbuf_queue.h"
 
-RTE_DECLARE_PER_LCORE(struct mbuf_queue, routing_queue);
+RTE_DECLARE_PER_LCORE(struct mbuf_queue*, routing_queue);
 
 static inline struct mbuf_queue*
-get_mbuf_queue() {
-  return &RTE_PER_LCORE(routing_queue);
+get_routing_Q() {
+  return RTE_PER_LCORE(routing_queue);
 }
 
 void

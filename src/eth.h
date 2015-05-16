@@ -15,25 +15,7 @@
 #define MAX_PKT_BURST 32
 #define MAX_PORT 4
 
-RTE_DECLARE_PER_LCORE(struct mbuf_queue*, eth_tx_queue);
-RTE_DECLARE_PER_LCORE(uint16_t, nic_queue_id);
-
-static inline struct mbuf_queue*
-get_eth_tx_Q() {
-  return RTE_PER_LCORE(eth_tx_queue);
-}
-
-static inline struct mbuf_queue*
-get_nic_queue_id() {
-  return RTE_PER_LCORE(nic_queue_id);
-}
-
-static inline struct mbuf_queue*
-set_nic_queue_id(uint16_t queue_id) {
-  RTE_PER_LCORE(nic_queue_id) = queue_id;
-}
-
-int
+void
 eth_input(struct rte_mbuf** bufs, uint16_t n_rx, uint8_t src_port);
 
 /* this function is called from upper layer function */

@@ -29,6 +29,8 @@
 #include <rte_malloc.h>
 
 #include "util.h"
+#include "interfaces.h"
+#include "global_mario.h"
 #include "arp.h"
 
 #define mmalloc(x) rte_malloc("fdb", (x), 0)
@@ -174,21 +176,21 @@ lookup_bulk_arp_table_entries(struct arp_table *table,
   return res;
 }
 
-static int
+static void
 arp_request_process(struct rte_mbuf* buf, struct arp_hdr* arphdr)
                     
 {
   int res;
   struct ether_hdr*eth;
   struct arp_ipv4 *body = &arphdr->arp_data;
-  if (!is_own_ip_addr(body->arp_tip)) return 0;
+  if (!is_own_ip_addr(intfs , body->arp_tip)) return;
   
-  res = add_arp_table_entry(env->arp_tb, &body->arp_sip, &body->arp_sha);
+  res = add_arp_table_entry(arp_tb, &body->arp_sip, &body->arp_sha);
   if (res) {
     RTE_LOG(ERR, ARP_TABLE, 
             "No more space for arp table: Drop ARP request.\n");
     rte_pktmbuf_free(buf);
-    return 0;
+    return ;
   }
 
   struct ether_addr tmp = body->arp_tha;
@@ -200,45 +202,42 @@ arp_request_process(struct rte_mbuf* buf, struct arp_hdr* arphdr)
   
 	eth = rte_pktmbuf_mtod(buf, struct ether_hdr *);
   eth->d_addr = body->arp_tha;
-  eth->s_addr = body->arp_sha;
+  eth->s_addr = body->arp_sha;  
 
-  return 1;
+  eth_enqueue_tx_pkt(buf);
 }
 
-static int
+static void
 arp_reply_process(struct rte_mbuf* buf, struct arp_hdr* arphdr)
                   
 {
-  int res;
+  int res = 0;
   struct ether_addr etheraddr;
   struct arp_ipv4 *body = &arphdr->arp_data;
   rte_eth_macaddr_get(buf->port, &etheraddr);
   
-  if (!is_same_ether_addr(&body->arp_tha, &etheraddr)) return 0;
+  if (!is_same_ether_addr(&body->arp_tha, &etheraddr)) return;
     
-  res = add_arp_table_entry(env->arp_tb, &body->arp_sip, &body->arp_sha);
-  if (res) return 0;
-
+  res = add_arp_table_entry(arp_tb, &body->arp_sip, &body->arp_sha);
+  
   rte_pktmbuf_free(buf);
-  return 0;
 }
 
-int
+void
 arp_rcv(struct rte_mbuf* buf)
 {
-  int res = 0;
   struct arp_hdr* arphdr;
   arphdr = (struct arp_hdr *) (rte_pktmbuf_mtod(buf, char*) + buf->l2_len);
-  if (arphdr->arp_hrd != ARP_HRD_ETHER) return 0;
+  if (arphdr->arp_hrd != ARP_HRD_ETHER) return ;
   // XXX some other checks
 
   switch(arphdr->arp_op) {
     case ARP_OP_REQUEST: {
-      res = arp_request_process(env, buf, arphdr);
+      arp_request_process(buf, arphdr);
       break;
     }
     case ARP_OP_REPLY: {
-      res = arp_reply_process(env, buf, arphdr);      
+      arp_reply_process(buf, arphdr);      
       break;
     }
   }  

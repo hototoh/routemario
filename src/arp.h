@@ -46,7 +46,7 @@ lookup_bulk_arp_table_entries(struct arp_table *talbe,
                               uint32_t num_entry,
                               struct arp_table_entry** entries);
 
-int
+void
 arp_rcv(struct rte_mbuf* buf);
 
 #endif

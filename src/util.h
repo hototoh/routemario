@@ -1,13 +1,18 @@
 #ifndef UTIL_H
 #define UTIL_H
 
+#include <stdint.h>
+
+//#define kth_bit(x, k) \
+//  ((x >> (sizeof(x)*8 - k)) & 1)
+
 #define ROUNDUP8(x)  (((x) + 7UL) & (~7UL))
 #define ROUNDUP16(x) (((x) + 15UL) & (~15UL))
 #define ROUNDUP32(x) (((x) + 31UL) & (~31UL))
 #define ROUNDUP64(x) (((x) + 63UL) & (~63UL))
 #define POWERROUND(x)                                     \
   ({                                                     \
-    int fls_bit = generic_fls(x);                         \
+    int fls_bit = generic_fls(x);                        \
     fls_bit = (1 << fls_bit) < x ? fls_bit - 1: fls_bit; \
     1 << fls_bit;                                         \
   })

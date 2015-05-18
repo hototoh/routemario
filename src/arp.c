@@ -37,6 +37,7 @@
 #define mfree(x) rte_free((x))
 
 #define RTE_LOGTYPE_ARP_TABLE RTE_LOGTYPE_USER1
+#define RTE_LOGTYPE_ARP RTE_LOGTYPE_USER2
 
 struct arp_table *arp_tb;
 
@@ -202,7 +203,7 @@ arp_request_process(struct rte_mbuf* buf, struct arp_hdr* arphdr)
   body->arp_sip = body->arp_tip;
   arphdr->arp_op = ARP_OP_REPLY;
   
-	eth = rte_pktmbuf_mtod(buf, struct ether_hdr *);
+  eth = rte_pktmbuf_mtod(buf, struct ether_hdr *);
   eth->d_addr = body->arp_tha;
   eth->s_addr = body->arp_sha;  
 
@@ -228,12 +229,13 @@ arp_reply_process(struct rte_mbuf* buf, struct arp_hdr* arphdr)
 void
 arp_rcv(struct rte_mbuf* buf)
 {
+  RTE_LOG(INFO, ARP, "%s\n", __func__);
   struct arp_hdr* arphdr;
   arphdr = (struct arp_hdr *) (rte_pktmbuf_mtod(buf, char*) + buf->l2_len);
-  if (arphdr->arp_hrd != ARP_HRD_ETHER) return ;
+  if (ntohs(arphdr->arp_hrd) != ARP_HRD_ETHER) return ;
   // XXX some other checks
 
-  switch(arphdr->arp_op) {
+  switch(ntohs(arphdr->arp_op)) {
     case ARP_OP_REQUEST: {
       arp_request_process(buf, arphdr);
       break;

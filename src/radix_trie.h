@@ -32,8 +32,8 @@ radix_trie_insert_item(struct radix_trie *trie, uint8_t* key,
                        uint8_t len, void* item);
 
 void *
-radix_trie_lookup_item(struct radix_trie *trie, uint8_t* key,
-                       uint8_t len, void* item);
+radix_trie_lookup_item(struct radix_trie *trie, uint8_t* key, uint8_t len);
+                       
 
 void
 radix_trie_delete_item(struct radix_trie *trie, uint8_t key, uint8_t len);

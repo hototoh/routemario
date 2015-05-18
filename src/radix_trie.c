@@ -10,15 +10,24 @@
 #include <unistd.h>
 #include <errno.h>
 
+#if 0
 #include <rte_config.h>
 #include <rte_common.h>
 #include <rte_log.h>
 #include <rte_malloc.h>
-
+#endif
 #include "util.h"
+#include "radix_trie.h"
 
+#if 0
 #define mmalloc(x) rte_malloc("rtrie", (x), 0)
 #define mfree(x) rte_free((x))
+#endif
+#if 1
+#define RTE_LOG(x, y, z) ;
+#define mmalloc(x) malloc(x)
+#define mfree(x) free((x))
+#endif
 
 #define RTE_LOGTYPE_RADIX RTE_LOGTYPE_USER1
 /**
@@ -34,9 +43,9 @@
  */
 #define kth_bit(x, k) ((x >> (sizeof(x)*8 - k)) & 1) 
 #define upper_kth_bits(x, k) \
-  (x >> (sizeof(x)*8 - k + 1)
+  (x >> (sizeof(x)*8 - k + 1))
 #define lower_kth_bits(x, k, len)                  \
-  ((x >> (sizeof(x)*8 - len)) & ((1 << (len -k)) - 1)
+  ((x >> (sizeof(x)*8 - len)) & ((1 << (len -k)) - 1))
 
 static inline uint8_t
 get_head_bit(uint8_t len, uint16_t max)
@@ -46,14 +55,14 @@ get_head_bit(uint8_t len, uint16_t max)
   return len;
 }
 
-static inline struct radix_trie**
+static inline struct radix_trie_node**
 get_radix_tire_haed_ptr(struct radix_trie* trie, uint8_t *key, uint16_t cur)
 {
   uint16_t head_index = 16 - cur;
   return &trie->heads[head_index];
 }
 
-static inline struct radix_trie*
+static inline struct radix_trie_node*
 get_radix_tire_haed(struct radix_trie* trie, uint8_t *key, uint16_t cur)
 {
   uint16_t head_index = 16 - cur;
@@ -61,18 +70,22 @@ get_radix_tire_haed(struct radix_trie* trie, uint8_t *key, uint16_t cur)
 }
 
 struct radix_trie*
-create_radix_trie(uint16_t len)
+create_radix_trie(uint16_t _len)
 {
-  uint8_t size = POWERROUND(len);
+  uint16_t len = POWERROUND(_len);
+  uint8_t size;
+  size = sizeof(struct radix_trie) + sizeof(struct radix_trie_node) * len;
   struct radix_trie *trie;
-  trie = (struct radix_trie*) mmalloc(sizeof(struct radix_trie) +
-                                      sizeof(struct radix_trie_node) * size);
+  trie = (struct radix_trie*) mmalloc(size);
   if (trie == NULL) {
     RTE_LOG(ERR, RADIX, "cannot allocate memory for trie.\n");
     return NULL;
   }
 
   trie->len = size;
+  for (uint8_t i = 0; i < size; i++) {
+    trie->heads[i] = NULL;
+  }
   return trie;
 }
 
@@ -96,13 +109,12 @@ create_radix_trie_node(uint8_t len, uint16_t prefix)
   node->len     = len;
   node->next[0] = NULL;
   node->next[1] = NULL;
-  node->next    = NULL;
   return node;
 }
 
 /* @cur point the previous bit index */
 static struct radix_trie_node *
-build_radix_sub_trie(uint8_t *key, uint8_t len, uin16_t cur, void* item)
+build_radix_sub_trie(uint8_t *key, uint8_t len, uint16_t cur, void* item)
 {
   struct radix_trie_node *node = NULL, *head = NULL, **pnode = NULL;
   while(cur < len) {
@@ -137,20 +149,17 @@ build_radix_sub_trie(uint8_t *key, uint8_t len, uin16_t cur, void* item)
   return head;
 }
 
-
-
 int
 radix_trie_insert_item(struct radix_trie *trie, uint8_t* key,
                        uint8_t len, void* item)
 {
   uint8_t key_bit;
-  void *item = NULL;
   uint16_t cur = get_head_bit(len, trie->len);
-  uint16_t head_index = get_head_index(key, cur);
-  struct radix_trie_node **pnode = get_head_node_ptr(trie, key, len);  
+  struct radix_trie_node **pnode = get_radix_tire_haed_ptr(trie, key, cur);
   struct radix_trie_node *node  = *pnode;
   
   while (node != NULL) {
+    printf("prefix: %u\n", node->prefix);
     if (!(++cur & PREFIX_MASK_SIZE)) key++;
     if (cur > len) {
       (*pnode)->item = item;
@@ -159,7 +168,7 @@ radix_trie_insert_item(struct radix_trie *trie, uint8_t* key,
 
     /* check aggregated node */
     bool split_flag = false;
-    uint16_t preifx = node->prefix;
+    uint16_t prefix = node->prefix;
     uint8_t nlen = node->len;
     for(uint8_t i = 1; i <= nlen; i++) {
       uint16_t bit = kth_bit(prefix, i);
@@ -170,7 +179,7 @@ radix_trie_insert_item(struct radix_trie *trie, uint8_t* key,
       }
 
       /* split node here */
-      uint16_t nprefix = upper_kth_bits(prefix, i, len) << (8 -i+1);
+      uint16_t nprefix = upper_kth_bits(prefix, i) << (8 -i+1);
       struct radix_trie_node* nnode = create_radix_trie_node(i-1, nprefix);
       if (nnode == NULL) {
         RTE_LOG(ERR, RADIX, "fail to add node.\n");
@@ -206,16 +215,49 @@ out:
 }
 
 void *
-radix_trie_lookup_item(struct radix_trie *trie, uint8_t* key,
-                       uint8_t len, void* item)
+radix_trie_lookup_item(struct radix_trie *trie, uint8_t* key, uint8_t len)
 {
+  uint8_t key_bit;
+  void *res = NULL;
+  uint16_t cur = get_head_bit(len, trie->len);
+  printf("cur: %u\n", cur);
+  struct radix_trie_node **pnode = get_radix_tire_haed_ptr(trie, key, cur);
+  struct radix_trie_node *node  = *pnode;
+  
+  res = node->item;
+  printf("prefix: %u\n", get_radix_tire_haed(trie, key, cur)->prefix);
+  while (node != NULL) {
+    if (!(++cur & PREFIX_MASK_SIZE)) key++;
+    if (cur > len) {
+      goto out;
+    }
 
+    /* check aggregated node */
+    uint16_t prefix = node->prefix;
+    uint8_t nlen = node->len;
+    for(uint8_t i = 1; i <= nlen; i++) {
+      uint16_t bit = kth_bit(prefix, i);
+      if (!(++cur & PREFIX_MASK_SIZE)) key++;      
+      if (cur <= len) {
+        key_bit = kth_bit(*key, (cur & PREFIX_MASK_SIZE));
+        if (bit ^ key_bit) continue;
+      }
+
+      goto out;
+    }
+
+    res = node->item;
+    key_bit = kth_bit(*key, (cur & PREFIX_MASK_SIZE));
+    pnode = &node->next[key_bit];
+    node = *pnode;
+  }
+  
+out:
+  return res;
 }
 
 void
 radix_trie_delete_item(struct radix_trie *trie, uint8_t key, uint8_t len)
 {
-  uint16_t head_index = get_head_index(key, len, trie->len);
-  struct radix_node *head = get_head_node(trie, key, len);
   
 }

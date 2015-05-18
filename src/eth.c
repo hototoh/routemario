@@ -18,13 +18,14 @@
 #include <rte_ethdev.h>
 
 #include "eth.h"
+#include "mbuf_queue.h"
 #include "fdb.h"
 #include "ipv4.h"
 #include "global_mario.h"
 
 #define RTE_LOGTYPE_ETH RTE_LOGTYPE_USER1
 
-RTE_DEFINE_PER_LCORE(struct mbuf_queue **, eth_tx_queue);
+RTE_DEFINE_PER_LCORE(struct mbuf_queues *, eth_tx_queue);
 RTE_DEFINE_PER_LCORE(uint16_t, nic_queue_id);
 
 void
@@ -62,7 +63,7 @@ eth_enqueue_tx_pkt(struct rte_mbuf *buf, uint8_t dst_port)
 {
   struct ether_addr mac;
   struct ether_hdr *eth = rte_pktmbuf_mtod(buf, struct ether_hdr *);
-  rte_get_macaddr_get(dst_port, &mac);
+  rte_eth_macaddr_get(dst_port, &mac);
   ether_addr_copy(&mac, &eth->s_addr);
   __eth_enqueue_tx_pkt(buf, dst_port);
 }
@@ -119,26 +120,23 @@ eth_input(struct rte_mbuf** bufs, uint16_t n_rx, uint8_t src_port)
     rte_prefetch0(rte_pktmbuf_mtod(pkt, void *));
     
     struct ether_hdr *eth = rte_pktmbuf_mtod(pkt, struct ether_hdr *);
-    RTE_LOG(INFO, ETH, "%s:\n"
-            "\tl2_len: %d\n"
-            "\tl3_len: %d\n"
-            "\tl4_len:%d\n",
-            __func__, pkt->l2_len, pkt->l3_len, pkt->l4_len);
-
+    //RTE_LOG(INFO, ETH, "%s:\n" "\tl2_len: %d\n" "\tl3_len: %d\n" "\tl4_len: %d\n",
+    //        __func__, pkt->l2_len, pkt->l3_len, pkt->l4_len);
+    RTE_LOG(INFO, ETH, "length of type: %x\n", ntohs(eth->ether_type));
     pkt->l2_len = ETHER_HDR_LEN;
-    switch (eth->ether_type) {
+    switch (ntohs(eth->ether_type)) {
       case ETHER_TYPE_ARP: {
         arp_rcv(pkt);
-        break;
+        continue;
       }
       case ETHER_TYPE_IPv4: {
         ip_rcv(&pkt, 1);
-        break;
+        continue;
       }
       case ETHER_TYPE_IPv6: {
         ;
-        break;
       }
     }
+    rte_pktmbuf_free(pkt);
   }
 }

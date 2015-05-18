@@ -49,7 +49,6 @@
  * Global variables
  */
 
-
 /**
  * Configurable number of RX/TX ring descriptors
  */
@@ -181,7 +180,6 @@ rmario_main_process(void)
         uint16_t len = (get_eth_tx_Q(port_id))->len;
 				if (len == 0) continue;
 
-				eth_queue_xmit(port_id, len);
         (get_eth_tx_Q(port_id))->len = 0;
       }
 
@@ -217,15 +215,30 @@ rmario_main_process(void)
   return ;
 }
 
+#define MAX_ROUTING_TX 32
 static int
 rmario_launch_one_lcore(void)
 {
-	RTE_LOG(INFO, MARIO, "[%u]processing launch\n", rte_lcore_id());
+	RTE_LOG(INFO, MARIO, "[%u] processing launch\n", rte_lcore_id());
 
   // decide the number of this core-pooling queue.
   set_nic_queue_id(rte_lcore_id());
-  rmario_main_process();
+  struct mbuf_queues *qs;
+  qs = create_mbuf_queues(rte_eth_dev_count(),  MAX_PKT_BURST);
+  if (qs == NULL) {
+    RTE_LOG(ERR, MARIO, "[%u] fail to create eth tx queue\n", rte_lcore_id());
+    
+  }
   
+  struct mbuf_queue *q = create_mbuf_queue(MAX_ROUTING_TX);
+  if (q == NULL) {
+    RTE_LOG(ERR, MARIO, "[%u] fail to create routing queue\n", rte_lcore_id());
+    
+  }
+
+  set_eth_tx_Qs(qs);
+  set_routing_Q(q);
+  rmario_main_process();  
 	return 0;
 }
 
@@ -392,7 +405,7 @@ main(int argc, char **argv)
   */
 
   /* Initialize global variables. */
-  intfs = create_l3_interfaces(4);
+  intfs = create_l3_interfaces(n_ports);
   if (intfs == NULL) {
     rte_exit(EXIT_FAILURE, "Fail to crate l3 interface instances.\n");
   }
@@ -402,15 +415,16 @@ main(int argc, char **argv)
     rte_exit(EXIT_FAILURE, "Fail to crate arp table.\n");
   }
 
-  rib = rte_lpmn_create("rib", rte_socket_id(), 1 << 10, 0);
+  rib = rte_lpm_create("rib", rte_socket_id(), 1 << 10, 0);
   if (rib == NULL) {
     rte_exit(EXIT_FAILURE, "Fail to crate RIB.\n");
   }
-
+ 
   /* Load configuration */
   if (load_config("./test_len.conf")) {
     rte_exit(EXIT_FAILURE, "Fail to load configuration.\n");
   }  
+  RTE_LOG(INFO, MARIO, "conf\n");
 
 	/* Initialise each port */
   for(uint8_t port_id = 0; port_id < n_ports; port_id++) {

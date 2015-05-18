@@ -49,10 +49,17 @@ destroy_l3_interfaces(struct l3_interfaces *l3_ifs)
   mfree(l3_ifs);
 }
 
+struct l3_interface *
+empty_l3_interface(struct l3_interfaces *l3_ifs) {
+  if (l3_ifs->len >=l3_ifs->max) return NULL;
+  // XXX need to fix
+  return &l3_ifs->list[l3_ifs->len++];
+}
+
 void
-set_l3_interfaces(struct l3_interface *l3if, const uint16_t vlan_id,
-                  const struct ether_addr *addr, const uint32_t ip_addr,
-                  const uint32_t ip_mask,  const uint8_t port_id)
+set_l3_interface(struct l3_interface *l3if, const uint16_t vlan_id,
+                 const struct ether_addr *addr, const uint32_t ip_addr,
+                 const uint32_t ip_mask,  const uint8_t port_id)
 {
   l3if->vlan_id = vlan_id;
   l3if->ip_addr = ip_addr;
@@ -67,9 +74,9 @@ is_own_ip_addr(struct l3_interfaces *l3ifs, uint32_t addr)
   struct l3_interface *l3_list = l3ifs->list;
   for(uint16_t i = 0; i < len; i++) {
     struct l3_interface *l3if = &l3_list[i];
-    if(!(l3if->ip_addr ^ addr)) return 1;
+    if(!(l3if->ip_addr ^ addr)) return l3if->port_id;
   }
-  return 0;
+  return -1;
 }
 
 int
@@ -79,7 +86,7 @@ is_own_subnet(struct l3_interfaces *l3ifs, uint32_t addr)
   struct l3_interface *l3_list = l3ifs->list;
   for(uint16_t i = 0; i < len; i++) {
     struct l3_interface *l3if = &l3_list[i];
-    if(!((l3if->ip_addr ^ addr) & l3if->ip_mask)) return 1;
+    if(!((l3if->ip_addr ^ addr) & l3if->ip_mask)) return l3if->port_id;
   }
   return 0;
 }

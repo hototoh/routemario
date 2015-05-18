@@ -1,6 +1,6 @@
 /**
  * Hiroshi Tokaku <tkk@hongo.wide.ad.jp>
- **/
+0;95;c **/
 
 #include <stdio.h>
 #include <stdint.h>
@@ -9,29 +9,34 @@
 #include <string.h>
 #include <errno.h>
 
-#if 0
 #include <rte_config.h>
 #include <rte_common.h>
 #include <rte_log.h>
-#endif
+#include <rte_ip.h>
+#include <rte_lpm.h>
 
-#if 0
 #include "util.h"
 #include "global_mario.h"
-#endif
+#include "interfaces.h"
 
 #define RTE_LOGTYPE_CONFIG RTE_LOGTYPE_USER1
 #define BUFFER_MAX 1024
 
-#if 0
+#if 1
 #define mmalloc(x) rte_malloc("rtrie", (x), 0)
 #define mfree(x) rte_free((x))
 #endif
-#if 1
+#if 0
 #define RTE_LOG(x, y, z) ;
 #define mmalloc(x) malloc(x)
 #define mfree(x) free((x))
 #endif
+
+uint32_t next_hop_tb[255];
+uint8_t len = 0;
+static uint8_t get_next_nhop_index() {
+  return len++;
+}
 
 int
 parse_port(char *buffer)
@@ -39,15 +44,26 @@ parse_port(char *buffer)
   uint8_t port_id = (uint8_t) atoi(strtok(NULL, " \t"));
   char *a_ip_addr   = strtok(NULL, " \t");
   uint8_t mask_len = (uint8_t) atoi(strtok(NULL, " \t"));
-  uint8_t ip_addr[4];
-  
-  ip_addr[0] = atoi(strtok(a_ip_addr, "."));
-  ip_addr[1] = atoi(strtok(NULL, "."));
-  ip_addr[2] = atoi(strtok(NULL, "."));
-  ip_addr[3] = atoi(strtok(NULL,  "."));  
+  uint8_t ip_addrs[4];  
+  ip_addrs[0] = atoi(strtok(a_ip_addr, "."));
+  ip_addrs[1] = atoi(strtok(NULL, "."));
+  ip_addrs[2] = atoi(strtok(NULL, "."));
+  ip_addrs[3] = atoi(strtok(NULL,  "."));
 
-  printf("port_id: %u\t", port_id);
-  printf("IP address: %u.%u.%u.%u/%u\n",
+  struct l3_interface *l3_if = empty_l3_interface(intfs);
+  if (l3_if == NULL) {
+    RTE_LOG(ERR, CONFIG, "No empty l3 interfaces.\n");
+    return 1;
+  }
+
+  struct ether_addr mac;
+  rte_get_macaddr_get(port_id, &mac);
+  uint32_t ip_addr = IPv4(ip_addrs[0], ip_addrs[1], ip_addrs[2], ip_addrs[3]); 
+  uint32_t ip_mask = ~((uint32_t) ((1UL << mask_len) - 1));
+  set_l3_interface(l3_if, 0, mac, ip_addr, ip_mask);
+
+  RTE_LOG(INFO, CONFIG, "port_id: %u\t", port_id);
+  RTE_LOG(INFO, CONFIG, "IP address: %u.%u.%u.%u/%u\n",
          ip_addr[0], ip_addr[1], ip_addr[2], ip_addr[3], mask_len);
   return 0;
 }
@@ -57,24 +73,31 @@ int parse_route(char *buffer)
   char *a_ip_addr  = strtok(NULL, " \t");
   uint8_t mask_len = atoi(strtok(NULL, " \t"));
   char *a_next_hop = strtok(NULL, " \t"); 
-  uint8_t ip_addr[4];
-  uint8_t next_hop[4];
+  uint8_t ip_addrs[4];
+  uint8_t next_hops[4];
   
-  ip_addr[0] = atoi(strtok(a_ip_addr, "."));
-  ip_addr[1] = atoi(strtok(NULL, "."));
-  ip_addr[2] = atoi(strtok(NULL, "."));
-  ip_addr[3] = atoi(strtok(NULL,  "."));  
+  ip_addrs[0] = atoi(strtok(a_ip_addr, "."));
+  ip_addrs[1] = atoi(strtok(NULL, "."));
+  ip_addrs[2] = atoi(strtok(NULL, "."));
+  ip_addrs[3] = atoi(strtok(NULL,  "."));  
 
-  next_hop[0] = atoi(strtok(a_next_hop, "."));
-  next_hop[1] = atoi(strtok(NULL, "."));
-  next_hop[2] = atoi(strtok(NULL, "."));
-  next_hop[3] = atoi(strtok(NULL,  "."));  
+  next_hops[0] = atoi(strtok(a_next_hop, "."));
+  next_hops[1] = atoi(strtok(NULL, "."));
+  next_hops[2] = atoi(strtok(NULL, "."));
+  next_hops[3] = atoi(strtok(NULL,  "."));  
 
-  printf("IP address: %u.%u.%u.%u/%u\t",
-         ip_addr[0], ip_addr[1], ip_addr[2], ip_addr[3], mask_len);
-  printf("IP address: %u.%u.%u.%u\n",
-         next_hop[0], next_hop[1], next_hop[2], next_hop[3]);
-
+  uint32_t ip_addr = IPv4(ip_addrs[0], ip_addrs[1], ip_addrs[2], ip_addrs[3]); 
+  uint32_t ip_mask = ~((uint32_t) ((1UL << mask_len) - 1));
+  uint32_t next_hop = IPv4(next_hops[0], next_hops[1],
+                           next_hops[2], next_hops[3]);
+  uint8_t index = get_next_nhop_index();
+  rte_lpm_add(rib, ip_addr, mask_len, index);
+  next_hop_tb[index] = next_hop;
+  
+  RTE_LOG(INFO, CONFIG, "IP address: %u.%u.%u.%u/%u\t",
+         ip_addrs[0], ip_addrs[1], ip_addrs[2], ip_addrs[3], mask_len);
+  RTE_LOG(INFO, CONFIG, "NextHop: %u.%u.%u.%u\n",
+         next_hops[0], next_hops[1], next_hops[2], next_hops[3]);
   return 0;
 }
 
@@ -86,22 +109,33 @@ load_config(char* path) {
     return 1;
   }
 
+  if (rib == NULL) {
+    RTE_LOG(ERR, CONFIG, "rib must be created before calling load_config.");
+    return 1;
+  }
+
+  if (intfs == NULL) {
+    RTE_LOG(ERR, CONFIG, 
+            "l3_interfaces must be created before calling load_config.");
+    return 1;
+  }
+
   char buffer[BUFFER_MAX];
   while(fgets(buffer, BUFFER_MAX, fp) != NULL ) {
     char* ope = strtok(buffer, " \t");
     if (strcmp(ope, "route") == 0) {
-      parse_route(buffer);
+      if(parse_route(buffer)) return 1;
     } else if (strcmp(ope, "port") == 0) {
-      parse_port(buffer);
+      if(parse_port(buffer)) return 1;
     }
   }
 
   return 0;
 }
 
-int main() {
-  char path[] = "./test_len.conf";
-  load_config(path);
-  return 0;
-}
+/* int main() { */
+/*   char path[] = "./test_len.conf"; */
+/*   load_config(path); */
+/*   return 0; */
+/* } */
   

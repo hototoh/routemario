@@ -58,11 +58,12 @@ __eth_enqueue_tx_pkt(struct rte_mbuf *buf, uint8_t dst_port)
 }
 
 void
-eth_enqueue_tx_pkt(struct rte_mbuf *buf)
+eth_enqueue_tx_pkt(struct rte_mbuf *buf, uint8_t dst_port)
 {
-  // XXX
-  // lookup fib table and set mac address & decide the dst-port;
-  uint8_t dst_port;
+  struct ether_addr mac;
+  struct ether_hdr *eth = rte_pktmbuf_mtod(buf, struct ether_hdr *);
+  rte_get_macaddr_get(dst_port, &mac);
+  ether_addr_copy(&mac, &eth->s_addr);
   __eth_enqueue_tx_pkt(buf, dst_port);
 }
 

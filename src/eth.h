@@ -20,7 +20,7 @@ eth_input(struct rte_mbuf** bufs, uint16_t n_rx, uint8_t src_port);
 
 /* this function is called from upper layer function */
 void
-eth_enqueue_tx_pkt(struct rte_mbuf *buf);
+eth_enqueue_tx_pkt(struct rte_mbuf *buf, uint8_t dst_port);
 
 /* this function is called from main loop function */
 void

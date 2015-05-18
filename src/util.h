@@ -3,8 +3,7 @@
 
 #include <stdint.h>
 
-//#define kth_bit(x, k) \
-//  ((x >> (sizeof(x)*8 - k)) & 1)
+//#define kth_bit(x, k) ((x >> (sizeof(x)*8 - k)) & 1)
 
 #define ROUNDUP8(x)  (((x) + 7UL) & (~7UL))
 #define ROUNDUP16(x) (((x) + 15UL) & (~15UL))
@@ -16,6 +15,8 @@
     fls_bit = (1 << fls_bit) < x ? fls_bit - 1: fls_bit; \
     1 << fls_bit;                                         \
   })
+
+#define IPV4_MASK(x) (~(uint32_t) ((1UL << x) - 1))
 
 static inline int
 generic_fls(uint32_t x)

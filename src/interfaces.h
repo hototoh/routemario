@@ -25,10 +25,14 @@ create_l3_interfaces(uint16_t len);
 void
 destroy_l3_interfaces(struct l3_interfaces *l3ifs);
 
+struct l3_interface*
+emptry_l3_interface(struct l3_interfaces *l3ifs);
+
+
 void
-set_l3_interfaces(struct l3_interface *l3if, const uint16_t vlan_id,
-                  const struct ether_addr *addr, const uint32_t ip_addr,
-                  const uint32_t ip_mask,  const uint8_t port_id);
+set_l3_interface(struct l3_interface *l3if, const uint16_t vlan_id,
+                 const struct ether_addr *addr, const uint32_t ip_addr,
+                 const uint32_t ip_mask,  const uint8_t port_id);
                     
 int
 is_own_ip_addr(struct l3_interfaces *l3ifs, uint32_t addr);

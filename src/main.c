@@ -25,8 +25,10 @@
 #include <rte_ethdev.h>
 #include <rte_mempool.h>
 #include <rte_malloc.h>
+#include <rte_lpm.h>
 
 #include "eth.h"
+#include "mario_config.h"
 #include "global_mario.h"
 
 #define mmalloc(x) rte_malloc("rmario", (x), 0)
@@ -388,12 +390,27 @@ main(int argc, char **argv)
     rte_eth_dev_info_get(port_id, &dev_info);
   }
   */
-	/* Initialize the port/queue configuration of each logical core */
-  /*
-  for(uint8_t port_id = 0; port_id < n_ports; port_id++) {
-    ;
+
+  /* Initialize global variables. */
+  intfs = create_l3_interfaces(4);
+  if (intfs == NULL) {
+    rte_exit(EXIT_FAILURE, "Fail to crate l3 interface instances.\n");
   }
-  */
+
+  arp_tb = create_arp_table(1 << 20);
+  if (arp_tb == NULL) {
+    rte_exit(EXIT_FAILURE, "Fail to crate arp table.\n");
+  }
+
+  rib = rte_lpmn_create("rib", rte_socket_id(), 1 << 10, 0);
+  if (rib == NULL) {
+    rte_exit(EXIT_FAILURE, "Fail to crate RIB.\n");
+  }
+
+  /* Load configuration */
+  if (load_config("./test_len.conf")) {
+    rte_exit(EXIT_FAILURE, "Fail to load configuration.\n");
+  }  
 
 	/* Initialise each port */
   for(uint8_t port_id = 0; port_id < n_ports; port_id++) {

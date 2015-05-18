@@ -206,7 +206,7 @@ arp_request_process(struct rte_mbuf* buf, struct arp_hdr* arphdr)
   eth->d_addr = body->arp_tha;
   eth->s_addr = body->arp_sha;  
 
-  eth_enqueue_tx_pkt(buf);
+  eth_enqueue_tx_pkt(buf, buf->port);
 }
 
 static void

@@ -10,6 +10,7 @@
 #include <unistd.h>
 #include <errno.h>
 #include <netinet/in.h>
+#include <arpa/inet.h>
 
 #include <rte_common.h>
 #include <rte_ethdev.h>
@@ -29,6 +30,7 @@
 #include <rte_branch_prediction.h>
 #include <rte_byteorder.h>
 #include <rte_malloc.h>
+#include <rte_lpm.h>
 #include <rte_per_lcore.h>
 
 #include "util.h"
@@ -42,6 +44,25 @@
 
 RTE_DEFINE_PER_LCORE(struct mbuf_queue*, routing_queue);
 
+static uint16_t
+calc_checksum(uint16_t *buf, uint32_t len)
+{
+  uint32_t sum = 0;
+
+  while (len > 1) {
+    sum += *buf;
+    buf++;
+    len -= 2;
+  }
+  if (len == 1) 
+    sum += *(uint8_t*) buf;
+
+  sum = (sum & 0xffff) + (sum >> 16);
+  sum = (sum & 0xffff) + (sum >> 16);
+
+  return (uint16_t) ~sum;
+}
+
 static int
 ip_routing(struct mbuf_queue* routing_queue)
 {
@@ -53,8 +74,22 @@ ip_routing(struct mbuf_queue* routing_queue)
     struct ipv4_hdr *iphdr;
     iphdr = (struct ipv4_hdr*) rte_pktmbuf_mtod(buf, char*) + buf->l2_len;
                                  
-    uint32_t dst = iphdr->dst_addr;
-    // XXX after impleneting fib
+    uint32_t dst = htonl(iphdr->dst_addr);
+    uint8_t next_index;
+    if(rte_lpm_lookup(rib, dst, &next_index) != 0) {
+      rte_mbuf_free(buf);
+      continue;
+    }
+    
+    uint32_t next_hop = next_hop_tb[next_index];
+    uint8_t dst_port = is_own_subnet(intfs, next_hop);
+    if(dst_port < 0) {
+      rte_mbuf_free(buf);
+      continue;
+    }
+    iphdr->hdr_checksum = 0;
+    iphdr->hdr_checksum = rte_ipv4_cksum(iphdr);
+    eth_enqueue_tx_pkt(buf, dst_port);    
   }
   return 0;
 }
@@ -105,8 +140,11 @@ ip_rcv(struct rte_mbuf **bufs, uint16_t n_rx)
     }
 
     /* this includes other ports subnet */
-    if(is_own_subnet(intfs, iphdr->dst_addr)) {
-      eth_enqueue_tx_pkt(buf);
+    uint8_t dst_port = is_own_subnet(intfs, iphdr->dst_addr);
+    if(dst_port >= 0) {
+      iphdr->hdr_checksum = 0;
+      iphdr->hdr_checksum = rte_ipv4_cksum(iphdr);
+      eth_enqueue_tx_pkt(buf, dst_port);
       continue;
     }
 

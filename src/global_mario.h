@@ -6,6 +6,8 @@
 #ifndef ROUTEMARIO_H
 #define ROUTEMARIO_H
 
+#include <rte_lpm.h>
+
 #include "interfaces.h"
 #include "mbuf_queue.h"
 #include "eth.h"
@@ -44,13 +46,13 @@ get_routing_Q() {
 }
 
 /* interfaces.h */
-extern struct l3_interfaces *intfs;
+extern struct l3_interfaces *intfs = NULL;
 
 /* arp.h */
-extern struct arp_table *arp_tb;
+extern struct arp_table *arp_tb = NULL;
 
 
-/* fib.h */
-// extern ;
-
+/* fib for tmp */
+extern struct rte_lpm* rib = NULL;
+extern uint32_t next_hop_tb[255]; /* defined in mario_config.h */
 #endif

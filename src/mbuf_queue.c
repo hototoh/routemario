@@ -31,7 +31,7 @@ create_mbuf_queue(uint16_t len)
                 sizeof(struct rte_mfbuf*) * len;
   queue = (struct mbuf_queue*) mmalloc(size);
   if (queue == NULL) {
-    RTE_LOG(ERR, MBUF_Q, "cannot allocate mmeory\n");
+    RTE_LOG(ERR, MBUF_Q, "cannot allocate memory\n");
     return NULL;
   }
   
@@ -40,11 +40,50 @@ create_mbuf_queue(uint16_t len)
   return queue;
 }
 
+struct mbuf_queues*
+create_mbuf_queues(uint8_t qsize, uint16_t len)
+{
+  struct mbuf_queues *qs;
+  size_t size = sizeof(struct mbuf_queues) +
+                sizeof(struct mbuf_queue*) * qsize;
+  qs = (struct mbuf_queues*) mmalloc(size);
+  if (qs == NULL) {
+    RTE_LOG(ERR, MBUF_Q, "cannot allocate memory\n");
+    return NULL;
+  }
+
+  for (uint8_t i = 0; i < size; i++) {
+    qs->queue[i] = create_mbuf_queue(len);
+    if (qs->queue[i] == NULL) {
+      RTE_LOG(ERR, MBUF_Q, "cannot allocate memory\n");
+      goto out;
+    }
+  }
+
+  qs->len = qsize;
+  return qs;
+out:
+  for (uint8_t i = 0; i < size; i++) {
+    if (qs->queue[i] != NULL)
+      mfree(qs->queue[i]);
+  }
+  mfree(qs);
+}
+
 void
 destroy_mbuf_queue(struct mbuf_queue *queue)
 {
   mfree(queue);
 }
 
+void
+destroy_mbuf_queues(struct mbuf_queues *queues)
+{
+  uint8_t len = queues->len;
+  for (uint8_t i = 0; i < len; i++) {
+    mfree(queues->queue[i]);
+  }
+  mfree(queues);
+}
 
 

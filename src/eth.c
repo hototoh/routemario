@@ -61,6 +61,7 @@ __eth_enqueue_tx_pkt(struct rte_mbuf *buf, uint8_t dst_port)
 void
 eth_enqueue_tx_pkt(struct rte_mbuf *buf, uint8_t dst_port)
 {
+  RTE_LOG(INFO, ETH, "%s: Port-%u\n", __func__, dst_port);
   struct ether_addr mac;
   struct ether_hdr *eth = rte_pktmbuf_mtod(buf, struct ether_hdr *);
   rte_eth_macaddr_get(dst_port, &mac);
@@ -115,15 +116,20 @@ ether_switching(struct rte_mbuf* buf, uint8_t src_port)
 void
 eth_input(struct rte_mbuf** bufs, uint16_t n_rx, uint8_t src_port)
 {
+  struct ether_addr mac;
+  rte_eth_macaddr_get(src_port, &mac);
   for(uint32_t i = 0; i < n_rx; i++) {
     struct rte_mbuf* pkt = bufs[i];
     rte_prefetch0(rte_pktmbuf_mtod(pkt, void *));
     
     struct ether_hdr *eth = rte_pktmbuf_mtod(pkt, struct ether_hdr *);
-    //RTE_LOG(INFO, ETH, "%s:\n" "\tl2_len: %d\n" "\tl3_len: %d\n" "\tl4_len: %d\n",
-    //        __func__, pkt->l2_len, pkt->l3_len, pkt->l4_len);
-    RTE_LOG(INFO, ETH, "length of type: %x\n", ntohs(eth->ether_type));
-    pkt->l2_len = ETHER_HDR_LEN;
+    //RTE_LOG(INFO, ETH, "length of type: %x\n", ntohs(eth->ether_type));
+    pkt->l2_len = ETHER_HDR_LEN;    
+    if((!is_same_ether_addr(&eth->d_addr, &mac)) &&
+       (!is_broadcast_ether_addr(&eth->d_addr))) {
+      rte_pktmbuf_free(pkt);
+      continue;
+    }
     switch (ntohs(eth->ether_type)) {
       case ETHER_TYPE_ARP: {
         arp_rcv(pkt);

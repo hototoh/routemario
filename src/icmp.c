@@ -67,7 +67,7 @@ icmp_proc_echo(struct rte_mbuf *buf, struct icmp_hdr *icmphdr)
 {
   struct ipv4_hdr *iphdr;
   iphdr = (struct ipv4_hdr*) rte_pktmbuf_mtod(buf, char*) + buf->l2_len;
-  uint32_t data_len = (uint32_t) (iphdr->total_length - buf->l3_len);
+  uint32_t data_len = (uint32_t) (ntohs(iphdr->total_length) - buf->l3_len);
 
   icmphdr->icmp_type = ICMP_ECHOREPLY;
   icmphdr->icmp_code = 0;

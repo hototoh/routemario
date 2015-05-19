@@ -183,37 +183,70 @@ static void
 arp_request_process(struct rte_mbuf* buf, struct arp_hdr* arphdr)
                     
 {
-  int res;
+  RTE_LOG(INFO, ARP, "%s\n", __func__);
   struct ether_hdr*eth;
-  struct arp_ipv4 *body = &arphdr->arp_data;
-  if (!is_own_ip_addr(intfs , body->arp_tip)) return;
+  struct arp_ipv4 *body = &arphdr->arp_data;  
+  int port_id = is_own_ip_addr(intfs , body->arp_tip);
+  if (port_id < 0) goto out;
   
-  res = add_arp_table_entry(arp_tb, &body->arp_sip, &body->arp_sha);
-  if (res) {
-    RTE_LOG(ERR, ARP_TABLE, 
-            "No more space for arp table: Drop ARP request.\n");
-    rte_pktmbuf_free(buf);
-    return ;
+  struct ether_addr* port_mac = get_macaddr_with_port(intfs, port_id);;
+  if (port_mac == NULL) {
+    RTE_LOG(ERR, ARP,  "No macaddr registered.\n");
+    goto out;
   }
 
-  struct ether_addr tmp = body->arp_tha;
-  body->arp_tha = body->arp_sha;
-  body->arp_sha = tmp;
+  int res = add_arp_table_entry(arp_tb, &body->arp_sip, &body->arp_sha);
+  if (res) {
+    RTE_LOG(ERR, ARP, "No more space for arp table: Drop ARP request.\n");
+    goto out;
+  }
+
+  uint32_t tmp_ip = body->arp_tip;
   body->arp_tip = body->arp_sip;
-  body->arp_sip = body->arp_tip;
-  arphdr->arp_op = ARP_OP_REPLY;
+  body->arp_sip = tmp_ip;
+  ether_addr_copy(&body->arp_sha, &body->arp_tha);
+  ether_addr_copy(port_mac     , &body->arp_sha);
+  arphdr->arp_op = htons(ARP_OP_REPLY);
   
   eth = rte_pktmbuf_mtod(buf, struct ether_hdr *);
-  eth->d_addr = body->arp_tha;
-  eth->s_addr = body->arp_sha;  
+  ether_addr_copy(&body->arp_tha, &eth->d_addr);
+  ether_addr_copy(&body->arp_sha, &eth->s_addr);
+  /*
+  {
+    uint8_t *a = (body->arp_sha).addr_bytes;
+    RTE_LOG(DEBUG, ARP, 
+            "ARP src %02x:%02x:%02x:%02x:%02x:%02x\n\n",
+            a[0], a[1], a[2], a[3], a[4], a[5]);
+
+    a = (body->arp_tha).addr_bytes;
+    RTE_LOG(DEBUG, ARP, 
+            "ARP target %02x:%02x:%02x:%02x:%02x:%02x\n\n",
+            a[0], a[1], a[2], a[3], a[4], a[5]);
+
+    a = (eth->s_addr).addr_bytes;
+    RTE_LOG(DEBUG, ARP, 
+            "MAC src %02x:%02x:%02x:%02x:%02x:%02x\n\n",
+            a[0], a[1], a[2], a[3], a[4], a[5]);
+
+    a = (eth->d_addr).addr_bytes;
+    RTE_LOG(DEBUG, ARP, 
+            "MAC dst %02x:%02x:%02x:%02x:%02x:%02x\n\n",
+            a[0], a[1], a[2], a[3], a[4], a[5]);
+
+  }
+  */
 
   eth_enqueue_tx_pkt(buf, buf->port);
+  return ;
+out:
+  rte_pktmbuf_free(buf);
 }
 
 static void
 arp_reply_process(struct rte_mbuf* buf, struct arp_hdr* arphdr)
                   
 {
+  RTE_LOG(INFO, ARP, "%s\n", __func__);
   int res = 0;
   struct ether_addr etheraddr;
   struct arp_ipv4 *body = &arphdr->arp_data;
@@ -232,17 +265,20 @@ arp_rcv(struct rte_mbuf* buf)
   RTE_LOG(INFO, ARP, "%s\n", __func__);
   struct arp_hdr* arphdr;
   arphdr = (struct arp_hdr *) (rte_pktmbuf_mtod(buf, char*) + buf->l2_len);
-  if (ntohs(arphdr->arp_hrd) != ARP_HRD_ETHER) return ;
-  // XXX some other checks
+  if (ntohs(arphdr->arp_hrd) != ARP_HRD_ETHER ||
+      ntohs(arphdr->arp_pro) != 0x0800 ||
+      arphdr->arp_hln        != 6 ||
+      arphdr->arp_pln        != 4 ) return ;
 
   switch(ntohs(arphdr->arp_op)) {
     case ARP_OP_REQUEST: {
       arp_request_process(buf, arphdr);
-      break;
+      return ;
     }
     case ARP_OP_REPLY: {
       arp_reply_process(buf, arphdr);      
-      break;
+      return ;
     }
-  }  
+  }
+  rte_pktmbuf_free(buf);
 }

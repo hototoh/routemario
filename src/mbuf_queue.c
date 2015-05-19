@@ -34,7 +34,8 @@ create_mbuf_queue(uint16_t len)
     RTE_LOG(ERR, MBUF_Q, "cannot allocate memory\n");
     return NULL;
   }
-  
+
+  memset(queue, 0, size);
   queue->len = 0;
   queue->max = len;
   return queue;
@@ -52,6 +53,7 @@ create_mbuf_queues(uint8_t qsize, uint16_t len)
     return NULL;
   }
 
+  memset(qs, 0, size);
   for (uint8_t i = 0; i < size; i++) {
     qs->queue[i] = create_mbuf_queue(len);
     if (qs->queue[i] == NULL) {

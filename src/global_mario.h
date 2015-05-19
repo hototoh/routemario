@@ -16,15 +16,20 @@
 
 /* eth.h */
 RTE_DECLARE_PER_LCORE(uint16_t, nic_queue_id);
-RTE_DECLARE_PER_LCORE(struct mbuf_queue **, eth_tx_queue);
-static inline struct mbuf_queue**
+RTE_DECLARE_PER_LCORE(struct mbuf_queues *, eth_tx_queue);
+static inline struct mbuf_queues*
 get_eth_tx_Qs() {
   return RTE_PER_LCORE(eth_tx_queue);
 }
 
+static inline struct mbuf_queues*
+set_eth_tx_Qs(struct mbuf_queues* queue) {
+  RTE_PER_LCORE(eth_tx_queue) = queue;
+}
+
 static inline struct mbuf_queue*
 get_eth_tx_Q(uint8_t port_id) {
-  return (RTE_PER_LCORE(eth_tx_queue))[port_id];
+  return (RTE_PER_LCORE(eth_tx_queue)->queue)[port_id];
 }
 
 static inline uint16_t
@@ -45,14 +50,19 @@ get_routing_Q() {
   return RTE_PER_LCORE(routing_queue);
 }
 
+static inline void
+set_routing_Q(struct mbuf_queue *q) {
+  RTE_PER_LCORE(routing_queue) = q;
+}
+
 /* interfaces.h */
-extern struct l3_interfaces *intfs = NULL;
+extern struct l3_interfaces *intfs;
 
 /* arp.h */
-extern struct arp_table *arp_tb = NULL;
+extern struct arp_table *arp_tb;
 
 
 /* fib for tmp */
-extern struct rte_lpm* rib = NULL;
-extern uint32_t next_hop_tb[255]; /* defined in mario_config.h */
+extern struct rte_lpm* rib; /* defined in mario_config.c */
+extern uint32_t next_hop_tb[255]; /* defined in mario_config.c */
 #endif

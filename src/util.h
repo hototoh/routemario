@@ -2,9 +2,10 @@
 #define UTIL_H
 
 #include <stdint.h>
+#include <rte_log.h>
+#include <rte_ether.h>
 
 //#define kth_bit(x, k) ((x >> (sizeof(x)*8 - k)) & 1)
-
 #define ROUNDUP8(x)  (((x) + 7UL) & (~7UL))
 #define ROUNDUP16(x) (((x) + 15UL) & (~15UL))
 #define ROUNDUP32(x) (((x) + 31UL) & (~31UL))

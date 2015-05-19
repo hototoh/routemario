@@ -41,10 +41,6 @@
 #define MAX_RX_QUEUE_PER_LCORE 16
 #define MAX_RX_QUEUE_PER_LCORE 16
 
-#ifndef MAX_PKT_BURST
-#define MAX_PKT_BURST 32
-#endif
-
 /**
  * Global variables
  */
@@ -202,10 +198,11 @@ rmario_main_process(void)
     for (uint8_t port_id = 0; port_id < n_ports; port_id++) {
       unsigned n_rx = rte_eth_rx_burst(port_id, (uint16_t) lcore_id,
                                        pkt_burst, MAX_PKT_BURST);
+      /*
       if (n_rx != 0)
-        RTE_LOG(INFO, MARIO, "[%u-%u] %u packet(s) came.\n",
-                lcore_id, port_id,  n_rx);
-
+        RTE_LOG(INFO, MARIO, "[Port-%u(%u)] %u packet(s) came.\n",
+                port_id, lcore_id, n_rx);
+      */
 #ifdef PORT_STATS
       __sync_fetch_and_add(&port_statistics[port_id].rx, n_rx);
 #endif
@@ -220,20 +217,19 @@ static int
 rmario_launch_one_lcore(void)
 {
 	RTE_LOG(INFO, MARIO, "[%u] processing launch\n", rte_lcore_id());
-
   // decide the number of this core-pooling queue.
   set_nic_queue_id(rte_lcore_id());
   struct mbuf_queues *qs;
   qs = create_mbuf_queues(rte_eth_dev_count(),  MAX_PKT_BURST);
   if (qs == NULL) {
     RTE_LOG(ERR, MARIO, "[%u] fail to create eth tx queue\n", rte_lcore_id());
-    
+    return EXIT_FAILURE;
   }
   
   struct mbuf_queue *q = create_mbuf_queue(MAX_ROUTING_TX);
   if (q == NULL) {
     RTE_LOG(ERR, MARIO, "[%u] fail to create routing queue\n", rte_lcore_id());
-    
+    return EXIT_FAILURE;    
   }
 
   set_eth_tx_Qs(qs);
@@ -367,7 +363,6 @@ main(int argc, char **argv)
   int ret;
   uint8_t n_ports;
   unsigned lcore_count;
-  struct fdb_table *fdb;
   
   ret = rte_eal_init(argc, argv);
   if (ret < 0)

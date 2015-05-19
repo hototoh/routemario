@@ -26,8 +26,7 @@ void
 destroy_l3_interfaces(struct l3_interfaces *l3ifs);
 
 struct l3_interface*
-emptry_l3_interface(struct l3_interfaces *l3ifs);
-
+get_l3_interface_port_id(struct l3_interfaces *l3ifs, uint8_t port_id);
 
 void
 set_l3_interface(struct l3_interface *l3if, const uint16_t vlan_id,
@@ -40,5 +39,6 @@ is_own_ip_addr(struct l3_interfaces *l3ifs, uint32_t addr);
 int
 is_own_subnet(struct l3_interfaces *l3ifs, uint32_t addr);
 
-
+struct ether_addr*
+get_macaddr_with_port(struct l3_interfaces * l3ifs, uint8_t port_id);
 #endif

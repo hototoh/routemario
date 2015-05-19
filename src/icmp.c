@@ -114,7 +114,7 @@ icmp_proc_time_exceeded(struct rte_mbuf *buf, struct icmp_hdr *icmphdr)
 void
 icmp_rcv(struct rte_mbuf *buf)
 {
-  RTE_LOG(DEBUG, ICMP, "%s\n", __func__);
+  // RTE_LOG(DEBUG, ICMP, "%s\n", __func__);
   struct icmp_hdr *icmphdr;
   struct ipv4_hdr *iphdr;
   iphdr = (struct ipv4_hdr*) (rte_pktmbuf_mtod(buf, char*) + buf->l2_len);

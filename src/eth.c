@@ -31,7 +31,6 @@ RTE_DEFINE_PER_LCORE(uint16_t, nic_queue_id);
 void
 eth_queue_xmit(uint8_t dst_port, uint16_t n)
 {
-  RTE_LOG(INFO, ETH, "%s: %d\n", __func__, __LINE__);
   struct rte_mbuf **queue = (get_eth_tx_Q(dst_port))->queue;
   uint16_t ret;  
   ret = rte_eth_tx_burst(dst_port, get_nic_queue_id(), queue, n);

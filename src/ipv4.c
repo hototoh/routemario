@@ -110,14 +110,6 @@ ip_enqueue_pkt(struct mbuf_queue* rqueue, struct rte_mbuf* buf)
 {
   struct ipv4_hdr *iphdr;
   iphdr = (struct ipv4_hdr*) (rte_pktmbuf_mtod(buf, char*) + buf->l2_len);
-  {
-    uint32_t d = ntohl(iphdr->dst_addr);
-    uint32_t s = ntohl(iphdr->src_addr);
-    RTE_LOG(INFO, IPV4, "%s: %u.%u.%u.%u -> %u.%u.%u.%u\n", __func__,
-            (s >> 24)&0xff,(s >> 16)&0xff,(s >> 8)&0xff,s&0xff,
-            (d >> 24)&0xff,(d>> 16)&0xff,(d >> 8)&0xff,d&0xff);
-  }
-
 
   int dst_port = is_own_subnet(intfs, ntohl(iphdr->dst_addr));
   if(dst_port < 0) {
@@ -126,7 +118,6 @@ ip_enqueue_pkt(struct mbuf_queue* rqueue, struct rte_mbuf* buf)
     return;
   }
 
-  RTE_LOG(INFO, IPV4, "dest is in the same LAN\n", dst_port);
   iphdr->hdr_checksum = 0;
   iphdr->hdr_checksum = rte_ipv4_cksum(iphdr);
   eth_enqueue_tx_pkt(buf, dst_port);
@@ -136,7 +127,7 @@ ip_enqueue_pkt(struct mbuf_queue* rqueue, struct rte_mbuf* buf)
 void
 ip_rcv(struct rte_mbuf **bufs, uint16_t n_rx)
 {
-  RTE_LOG(INFO, IPV4, "%s %upacket(s)\n", __func__, n_rx);
+  RTE_LOG(INFO, IPV4, "%s %u packet(s)\n", __func__, n_rx);
   struct mbuf_queue *rq = get_routing_Q();
   for (uint16_t i = 0; i < n_rx; i++) {
     int res = 0;
@@ -147,6 +138,7 @@ ip_rcv(struct rte_mbuf **bufs, uint16_t n_rx)
     buf->l3_len = (iphdr->version_ihl & IPV4_HDR_IHL_MASK) << 2;    
     
     /* packets to this host. */
+    /*
     {
       uint32_t d = ntohl(iphdr->dst_addr);
       uint32_t s = ntohl(iphdr->src_addr);
@@ -154,15 +146,10 @@ ip_rcv(struct rte_mbuf **bufs, uint16_t n_rx)
               (s >> 24)&0xff,(s >> 16)&0xff,(s >> 8)&0xff,s&0xff,
               (d >> 24)&0xff,(d>> 16)&0xff,(d >> 8)&0xff,d&0xff);
     }
-
+    */
     ndst = ntohl(iphdr->dst_addr);
     int port_id = is_own_ip_addr(intfs, ndst);
     if(port_id >= 0) {      
-      {
-        uint32_t s = ntohl(intfs->list[port_id].ip_addr);
-        RTE_LOG(INFO, IPV4, "Port-%d: %u.%u.%u.%u\n", port_id,
-                (s >>24)&0xff,(s >>16)&0xff,(s >>8)&0xff,s&0xff);
-      }
       switch(iphdr->next_proto_id) {
         case IPPROTO_ICMP: {
           icmp_rcv(buf);
@@ -186,7 +173,6 @@ ip_rcv(struct rte_mbuf **bufs, uint16_t n_rx)
     /* this includes other ports subnet */
     int dst_port = is_own_subnet(intfs, ndst);
     if(dst_port >= 0) {
-      RTE_LOG(INFO, IPV4, "Port-%d: forwarding\n", dst_port);
       iphdr->hdr_checksum = 0;
       iphdr->hdr_checksum = rte_ipv4_cksum(iphdr);
       eth_enqueue_tx_pkt(buf, dst_port);

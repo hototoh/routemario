@@ -66,7 +66,7 @@ static void
 icmp_proc_echo(struct rte_mbuf *buf, struct icmp_hdr *icmphdr)
 {
   struct ipv4_hdr *iphdr;
-  iphdr = (struct ipv4_hdr*) rte_pktmbuf_mtod(buf, char*) + buf->l2_len;
+  iphdr = (struct ipv4_hdr*) (rte_pktmbuf_mtod(buf, char*) + buf->l2_len);
   uint32_t data_len = (uint32_t) (ntohs(iphdr->total_length) - buf->l3_len);
 
   icmphdr->icmp_type = ICMP_ECHOREPLY;
@@ -111,20 +111,29 @@ icmp_proc_time_exceeded(struct rte_mbuf *buf, struct icmp_hdr *icmphdr)
 void
 icmp_rcv(struct rte_mbuf *buf)
 {
+  RTE_LOG(DEBUG, ICMP, "%s\n", __func__);
   struct icmp_hdr *icmphdr;
-  icmphdr = (struct icmp_hdr *) (rte_pktmbuf_mtod(buf, char*) +
-                                 buf->l2_len +  buf->l3_len);
-  // XXX calc checksum
-  
+  struct ipv4_hdr *iphdr;
+  iphdr = (struct ipv4_hdr*) (rte_pktmbuf_mtod(buf, char*) + buf->l2_len);
+  icmphdr = (struct icmp_hdr *) ((char*) iphdr + buf->l3_len);
+  uint32_t data_len = (uint32_t) (ntohs(iphdr->total_length) - buf->l3_len);
+  uint16_t res = calc_checksum((uint16_t *)icmphdr, data_len);
+  if (res) {
+    RTE_LOG(DEBUG, ICMP, "checksum error\n");
+    goto out;
+  }
+
   switch(icmphdr->icmp_type) {
     case ICMP_ECHOREPLY:
       icmp_proc_echo_reply(buf, icmphdr);
-      break;
+      return ;
     case ICMP_ECHO:
       icmp_proc_echo(buf, icmphdr);
-      break;
+      return ;
     case ICMP_TIME_EXCEEDED:
       icmp_proc_time_exceeded(buf, icmphdr);
-      break;
-  }  
+      return ;
+  }
+out:
+  rte_pktmbuf_free(buf);
 }

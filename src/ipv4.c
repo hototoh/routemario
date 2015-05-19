@@ -64,10 +64,10 @@ calc_checksum(uint16_t *buf, uint32_t len)
 }
 
 static int
-ip_routing(struct mbuf_queue* routing_queue)
+ip_routing(struct mbuf_queue* rqueue)
 {
-  struct rte_mbuf **queue = routing_queue->queue;
-  uint16_t len = routing_queue->len;
+  struct rte_mbuf **queue = rqueue->queue;
+  uint16_t len = rqueue->len;
   RTE_LOG(INFO, IPV4, "[%u] %s: qlen: %u\n", rte_lcore_id(), __func__, len);
 
   for (uint16_t i = 0; i < len; i++) {
@@ -92,16 +92,17 @@ ip_routing(struct mbuf_queue* routing_queue)
     iphdr->hdr_checksum = rte_ipv4_cksum(iphdr);
     eth_enqueue_tx_pkt(buf, dst_port);    
   }
-  routing_queue->len = 0;
+  rqueue->len = 0;
   return 0;
 }
 
 int
-ip_enqueue_routing_pkt(struct mbuf_queue* routing_queue, struct rte_mbuf* buf)
+ip_enqueue_routing_pkt(struct mbuf_queue* rqueue, struct rte_mbuf* buf)
 {
   struct mbuf_queue *r_queue = get_routing_Q();
   r_queue->queue[r_queue->len++] = buf;  
-  RTE_LOG(INFO, IPV4, "%s: qlen: %u\n", __func__, r_queue->len);
+  RTE_LOG(INFO, IPV4, "[%u] %s: qlen: %u\n",
+          rte_lcore_id(), __func__, r_queue->len);
   return r_queue->len == r_queue->max ? 1 : 0;
 }
 
@@ -126,7 +127,7 @@ ip_rcv(struct rte_mbuf **bufs, uint16_t n_rx)
               (d >> 24)&0xff,(d>> 16)&0xff,(d >> 8)&0xff,d&0xff);
     }
     int port_id = is_own_ip_addr(intfs, iphdr->dst_addr);
-    if(port_id >= 0) {
+    if(port_id >= 0) {      
       {
         uint8_t s = ntohl(intfs->list[3].ip_addr);
         RTE_LOG(INFO, IPV4, "Port-%d: %u.%u.%u.%u\n", port_id,
@@ -162,9 +163,9 @@ ip_rcv(struct rte_mbuf **bufs, uint16_t n_rx)
       continue;
     }
 
-    RTE_LOG(INFO, IPV4, "routing\n");
     struct mbuf_queue *rq = get_routing_Q();
-    RTE_LOG(INFO, IPV4, "%s: qlen: %u\n", __func__, rq->len);
+    RTE_LOG(INFO, IPV4, "[%u] %s: qlen: %u\n",
+            rte_lcore_id(), __func__, rq->len);
 
     res = ip_enqueue_routing_pkt(get_routing_Q(), buf);
     if (unlikely(res)) {

@@ -22,7 +22,7 @@ void
 ip_output(uint32_t dst, uint32_t src, struct rte_mbuf* buf);
 
 int
-ip_enqueue_routing_pkt(struct mbuf_queue* routing_queue, struct rte_mbuf* buf);
+ip_enqueue_routing_pkt(struct mbuf_queue* rqueue, struct rte_mbuf* buf);
 
 
 #endif

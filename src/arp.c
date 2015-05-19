@@ -181,9 +181,7 @@ lookup_bulk_arp_table_entries(struct arp_table *table,
 
 static void
 arp_request_process(struct rte_mbuf* buf, struct arp_hdr* arphdr)
-                    
 {
-  RTE_LOG(INFO, ARP, "%s\n", __func__);
   struct ether_hdr*eth;
   struct arp_ipv4 *body = &arphdr->arp_data;  
   int port_id = is_own_ip_addr(intfs , body->arp_tip);
@@ -246,7 +244,6 @@ static void
 arp_reply_process(struct rte_mbuf* buf, struct arp_hdr* arphdr)
                   
 {
-  RTE_LOG(INFO, ARP, "%s\n", __func__);
   int res = 0;
   struct ether_addr etheraddr;
   struct arp_ipv4 *body = &arphdr->arp_data;

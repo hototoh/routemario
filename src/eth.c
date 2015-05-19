@@ -123,7 +123,8 @@ eth_input(struct rte_mbuf** bufs, uint16_t n_rx, uint8_t src_port)
     rte_prefetch0(rte_pktmbuf_mtod(pkt, void *));
     
     struct ether_hdr *eth = rte_pktmbuf_mtod(pkt, struct ether_hdr *);
-    //RTE_LOG(INFO, ETH, "length of type: %x\n", ntohs(eth->ether_type));
+    //RTE_LOG(INFO, ETH, "[Port %u] length of type: %x\n",
+    // pkt->port, ntohs(eth->ether_type));
     pkt->l2_len = ETHER_HDR_LEN;    
     if((!is_same_ether_addr(&eth->d_addr, &mac)) &&
        (!is_broadcast_ether_addr(&eth->d_addr))) {

@@ -47,18 +47,21 @@ void
 icmp_send(struct rte_mbuf *buf)
 {
   RTE_LOG(WARNING, ICMP, "icmp_send is NOT implemented.");
+  rte_pktmbuf_free(buf);
 }
 
 void
 icmp_send_time_exceeded(struct rte_mbuf *buf, uint32_t dst_ip_addr)
 {
   RTE_LOG(WARNING, ICMP, "ICMP time exceeded is NOT implemented.");
+  rte_pktmbuf_free(buf);
 }
 
 void
 icmp_send_destination_unreachable(struct rte_mbuf *buf, uint32_t dst_ip_addr)
 {
   RTE_LOG(WARNING, ICMP, "ICMP destination unreachable is NOT implemented.");
+  rte_pktmbuf_free(buf);
 }
 
 
@@ -81,14 +84,14 @@ icmp_proc_echo(struct rte_mbuf *buf, struct icmp_hdr *icmphdr)
   iphdr->time_to_live = DEFAULT_TTL;
   iphdr->hdr_checksum = calc_checksum((uint16_t *)iphdr , buf->l3_len);
 
-  ip_enqueue_routing_pkt(get_routing_Q() , buf);
+  ip_enqueue_pkt(get_routing_Q() , buf);
 }
 
 static void
 icmp_proc_echo_reply(struct rte_mbuf *buf, struct icmp_hdr *icmphdr)
 {
   struct ipv4_hdr *iphdr;
-  iphdr = (struct ipv4_hdr*) rte_pktmbuf_mtod(buf, char*) + buf->l2_len;
+  iphdr = (struct ipv4_hdr*) (rte_pktmbuf_mtod(buf, char*) + buf->l2_len);
   uint32_t s_addr = iphdr->src_addr;
   RTE_LOG(INFO, ICMP, "get icmp reply packet from %u.%u.%u.%u\n",
           (s_addr >> 24) & 0xff, (s_addr >> 16) & 0xff,
@@ -100,7 +103,7 @@ static void
 icmp_proc_time_exceeded(struct rte_mbuf *buf, struct icmp_hdr *icmphdr)
 {
   struct ipv4_hdr *iphdr;
-  iphdr = (struct ipv4_hdr*) rte_pktmbuf_mtod(buf, char*) + buf->l2_len;
+  iphdr = (struct ipv4_hdr*) (rte_pktmbuf_mtod(buf, char*) + buf->l2_len);
   uint32_t s_addr = iphdr->src_addr;
   RTE_LOG(INFO, ICMP, "get icmp time exceeded packet from %u.%u.%u.%u\n",
           (s_addr >> 24) & 0xff, (s_addr >> 16) & 0xff,

@@ -31,25 +31,30 @@ RTE_DEFINE_PER_LCORE(uint16_t, nic_queue_id);
 void
 eth_queue_xmit(uint8_t dst_port, uint16_t n)
 {
+  RTE_LOG(INFO, ETH, "%s: %d\n", __func__, __LINE__);
   struct rte_mbuf **queue = (get_eth_tx_Q(dst_port))->queue;
   uint16_t ret;  
   ret = rte_eth_tx_burst(dst_port, get_nic_queue_id(), queue, n);
   if (unlikely(ret < n)) {
+    RTE_LOG(WARNING, ETH, "fail to %d packets xmit.\n", (n - ret));
     do {
       rte_pktmbuf_free(queue[ret]);
     } while(++ret < n);
   }
+
+  //get_eth_tx_Q(dst_port)->len = 0;
   return ;
 }
 
 static void
 __eth_enqueue_tx_pkt(struct rte_mbuf *buf, uint8_t dst_port)
 {
-  struct mbuf_queue* tx_queue = get_eth_tx_Q(dst_port);
+  struct mbuf_queue* tx_queue = get_eth_tx_Q(dst_port);  
   uint16_t len = tx_queue->len;
   tx_queue->queue[len++] = buf;
   
   if (unlikely(len == tx_queue->max)) {
+    RTE_LOG(DEBUG, ETH, "Port-%u queue is full\n", dst_port);
     eth_queue_xmit(dst_port, len);
     len = 0;
   }
@@ -61,11 +66,29 @@ __eth_enqueue_tx_pkt(struct rte_mbuf *buf, uint8_t dst_port)
 void
 eth_enqueue_tx_pkt(struct rte_mbuf *buf, uint8_t dst_port)
 {
-  RTE_LOG(INFO, ETH, "%s: Port-%u\n", __func__, dst_port);
-  struct ether_addr mac;
   struct ether_hdr *eth = rte_pktmbuf_mtod(buf, struct ether_hdr *);
-  rte_eth_macaddr_get(dst_port, &mac);
-  ether_addr_copy(&mac, &eth->s_addr);
+  //struct ether_addr mac;
+  //rte_eth_macaddr_get(dst_port, &mac);
+  //ether_addr_copy(&mac, &eth->s_addr);
+
+  switch (ntohs(eth->ether_type)) {
+    case ETHER_TYPE_IPv4: {
+      struct ipv4_hdr *iphdr;
+      struct arp_table_entry *entry;
+      iphdr = (struct ipv4_hdr*) (rte_pktmbuf_mtod(buf, char*) + buf->l2_len);
+      entry = lookup_arp_table_entry(arp_tb, &iphdr->dst_addr);
+      if (entry == NULL || (is_expired(entry))) {
+        RTE_LOG(INFO, ETH, "does not exit arp entry\n");
+        arp_send_request(buf, iphdr->dst_addr, dst_port);
+        return;
+      }
+      ether_addr_copy(&entry->eth_addr, &eth->d_addr);
+      buf->pkt_len = ntohs(iphdr->total_length);
+      break;
+    }
+  }
+
+  buf->pkt_len += ETHER_HDR_LEN;
   __eth_enqueue_tx_pkt(buf, dst_port);
 }
 

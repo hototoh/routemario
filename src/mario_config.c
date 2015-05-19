@@ -62,11 +62,11 @@ parse_port(char *buffer)
   struct ether_addr mac;
   rte_eth_macaddr_get(port_id, &mac);
   uint32_t ip_addr = IPv4(ip_addrs[0], ip_addrs[1], ip_addrs[2], ip_addrs[3]); 
-  uint32_t ip_mask = htonl((uint32_t) (~(1UL) << (32 - mask_len - 1)));
+  uint32_t ip_mask = (uint32_t) (~(1UL) << (32 - mask_len - 1));
   set_l3_interface(l3_if, 0, &mac, ip_addr, ip_mask, port_id);
   {
-    uint32_t s = ntohl(ip_addr);
-    uint32_t m = ntohl(ip_mask);
+    uint32_t s = ip_addr;
+    uint32_t m = ip_mask;
     RTE_LOG(INFO, CONFIG,
             "port_id: %u\t %u.%u.%u.%u/%u ( %u.%u.%u.%u )\n", port_id,
             (s >> 24)&0xff,(s >> 16)&0xff,(s >> 8)&0xff,s&0xff, mask_len,
@@ -95,7 +95,7 @@ parse_route(char *buffer)
   next_hops[3] = atoi(strtok(NULL,  "."));  
 
   uint32_t ip_addr = IPv4(ip_addrs[0], ip_addrs[1], ip_addrs[2], ip_addrs[3]); 
-  uint32_t ip_mask = htonl((uint32_t) (~(1UL) << (32 - mask_len - 1)));
+  uint32_t ip_mask = (uint32_t) (~(1UL) << (32 - mask_len - 1));
   uint32_t next_hop = IPv4(next_hops[0], next_hops[1],
                            next_hops[2], next_hops[3]);
   uint8_t index = get_next_nhop_index();

@@ -123,7 +123,6 @@ remove_arp_table_entry(struct arp_table* table, const uint32_t *ip_addr)
     ether_addr_copy((struct ether_addr*) "000000", &entry->eth_addr);
     entry->ip_addr = 0;
     entry->expire = 0;
-    
     return 0;
   }
 
@@ -179,12 +178,46 @@ lookup_bulk_arp_table_entries(struct arp_table *table,
   return res;
 }
 
+void
+arp_send_request(struct rte_mbuf* buf, uint32_t tip, uint8_t port_id)
+{
+  if (buf == NULL) {
+    buf = rte_pktmbuf_alloc(rmario_pktmbuf_pool);
+  }
+  
+  struct arp_hdr* arphdr;
+  struct ether_hdr* eth = rte_pktmbuf_mtod(buf, struct ether_hdr*);
+  arphdr = (struct arp_hdr *)(rte_pktmbuf_mtod(buf, char*) + buf->l2_len);
+  arphdr->arp_hrd = htons(ARP_HRD_ETHER);
+  arphdr->arp_pro = htons(ETHER_TYPE_IPv4);
+  arphdr->arp_hln = ETHER_ADDR_LEN;
+  arphdr->arp_pln = sizeof(uint32_t);
+  arphdr->arp_op  = htons(ARP_OP_REQUEST);
+
+  struct l3_interface* l3_if = get_l3_interface_port_id(intfs, port_id);
+  if (l3_if == NULL) goto free;
+  struct arp_ipv4 *body = &arphdr->arp_data;
+  body->arp_tip = tip;
+  body->arp_sip = htonl(l3_if->ip_addr);
+  memset(&body->arp_tha, 0xff, ETHER_ADDR_LEN);
+  memset(&eth->d_addr  , 0xff, ETHER_ADDR_LEN);
+  ether_addr_copy(&l3_if->mac, &body->arp_sha);
+  ether_addr_copy(&l3_if->mac, &eth->s_addr);
+  eth->ether_type = htons(ETHER_TYPE_ARP);
+
+  buf->pkt_len = 46;  
+  eth_enqueue_tx_pkt(buf, buf->port);
+  return;
+free:
+  rte_pktmbuf_free(buf);
+}
+
 static void
 arp_request_process(struct rte_mbuf* buf, struct arp_hdr* arphdr)
 {
   struct ether_hdr*eth;
-  struct arp_ipv4 *body = &arphdr->arp_data;  
-  int port_id = is_own_ip_addr(intfs , body->arp_tip);
+  struct arp_ipv4 *body = &arphdr->arp_data;
+  int port_id = is_own_ip_addr(intfs , ntohl(body->arp_tip));
   if (port_id < 0) goto out;
   
   struct ether_addr* port_mac = get_macaddr_with_port(intfs, port_id);;
@@ -209,31 +242,31 @@ arp_request_process(struct rte_mbuf* buf, struct arp_hdr* arphdr)
   eth = rte_pktmbuf_mtod(buf, struct ether_hdr *);
   ether_addr_copy(&body->arp_tha, &eth->d_addr);
   ether_addr_copy(&body->arp_sha, &eth->s_addr);
+  buf->pkt_len = 46;
   /*
   {
     uint8_t *a = (body->arp_sha).addr_bytes;
     RTE_LOG(DEBUG, ARP, 
-            "ARP src %02x:%02x:%02x:%02x:%02x:%02x\n\n",
+            "ARP src %02x:%02x:%02x:%02x:%02x:%02x\n",
             a[0], a[1], a[2], a[3], a[4], a[5]);
 
     a = (body->arp_tha).addr_bytes;
     RTE_LOG(DEBUG, ARP, 
-            "ARP target %02x:%02x:%02x:%02x:%02x:%02x\n\n",
+            "ARP target %02x:%02x:%02x:%02x:%02x:%02x\n",
             a[0], a[1], a[2], a[3], a[4], a[5]);
 
     a = (eth->s_addr).addr_bytes;
     RTE_LOG(DEBUG, ARP, 
-            "MAC src %02x:%02x:%02x:%02x:%02x:%02x\n\n",
+            "MAC src %02x:%02x:%02x:%02x:%02x:%02x\n",
             a[0], a[1], a[2], a[3], a[4], a[5]);
 
     a = (eth->d_addr).addr_bytes;
     RTE_LOG(DEBUG, ARP, 
-            "MAC dst %02x:%02x:%02x:%02x:%02x:%02x\n\n",
+            "MAC dst %02x:%02x:%02x:%02x:%02x:%02x\n",
             a[0], a[1], a[2], a[3], a[4], a[5]);
-
+    
   }
-  */
-
+  // */
   eth_enqueue_tx_pkt(buf, buf->port);
   return ;
 out:
@@ -245,13 +278,13 @@ arp_reply_process(struct rte_mbuf* buf, struct arp_hdr* arphdr)
                   
 {
   int res = 0;
-  struct ether_addr etheraddr;
+  struct ether_addr mac;
   struct arp_ipv4 *body = &arphdr->arp_data;
-  rte_eth_macaddr_get(buf->port, &etheraddr);
-  
-  if (!is_same_ether_addr(&body->arp_tha, &etheraddr)) return;
-    
-  res = add_arp_table_entry(arp_tb, &body->arp_sip, &body->arp_sha);
+  rte_eth_macaddr_get(buf->port, &mac);
+
+  res = add_arp_table_entry(arp_tb, &body->arp_sip, &body->arp_sha);  
+  if (res) 
+    RTE_LOG(WARNING, ARP, "fail to add arp entry\n");
   
   rte_pktmbuf_free(buf);
 }
@@ -263,9 +296,9 @@ arp_rcv(struct rte_mbuf* buf)
   struct arp_hdr* arphdr;
   arphdr = (struct arp_hdr *) (rte_pktmbuf_mtod(buf, char*) + buf->l2_len);
   if (ntohs(arphdr->arp_hrd) != ARP_HRD_ETHER ||
-      ntohs(arphdr->arp_pro) != 0x0800 ||
-      arphdr->arp_hln        != 6 ||
-      arphdr->arp_pln        != 4 ) return ;
+      ntohs(arphdr->arp_pro) != ETHER_TYPE_IPv4 ||
+      arphdr->arp_hln        != ETHER_ADDR_LEN ||
+      arphdr->arp_pln        != sizeof(uint32_t) ) return ;
 
   switch(ntohs(arphdr->arp_op)) {
     case ARP_OP_REQUEST: {

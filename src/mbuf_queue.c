@@ -54,7 +54,7 @@ create_mbuf_queues(uint8_t qsize, uint16_t len)
   }
 
   memset(qs, 0, size);
-  for (uint8_t i = 0; i < size; i++) {
+  for (uint8_t i = 0; i < qsize; i++) {
     qs->queue[i] = create_mbuf_queue(len);
     if (qs->queue[i] == NULL) {
       RTE_LOG(ERR, MBUF_Q, "cannot allocate memory\n");
@@ -65,7 +65,7 @@ create_mbuf_queues(uint8_t qsize, uint16_t len)
   qs->len = qsize;
   return qs;
 out:
-  for (uint8_t i = 0; i < size; i++) {
+  for (uint8_t i = 0; i < qsize; i++) {
     if (qs->queue[i] != NULL)
       mfree(qs->queue[i]);
   }

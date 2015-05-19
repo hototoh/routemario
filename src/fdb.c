@@ -36,6 +36,8 @@
 
 #define RTE_LOGTYPE_FDB RTE_LOGTYPE_USER1
 
+struct fdb_table *fdb_tb;
+
 struct fdb_table*
 create_fdb_table(uint32_t _size)
 {

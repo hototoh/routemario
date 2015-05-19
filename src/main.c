@@ -1,6 +1,6 @@
 /**
- * Hiroshi Tokaku <tkk@hongo.wide.ad.jp>
- **/
+0;95;c* Hiroshi Tokaku <tkk@hongo.wide.ad.jp>
+**/
 
 #include <stdio.h>
 #include <stdint.h>
@@ -9,6 +9,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <errno.h>
+#include <time.h>
 #include <getopt.h>
 
 #include <rte_config.h>
@@ -28,6 +29,7 @@
 #include <rte_lpm.h>
 
 #include "eth.h"
+#include "fdb.h"
 #include "mario_config.h"
 #include "global_mario.h"
 
@@ -156,15 +158,14 @@ print_stats()
 static void
 rmario_main_process(void)
 {
+  unsigned lcore_id = rte_lcore_id();
+  struct mbuf_queue *q = get_routing_Q();
   struct rte_mbuf *pkt_burst[MAX_PKT_BURST];
   uint8_t n_ports = rte_eth_dev_count();
-  unsigned lcore_id = rte_lcore_id();
   uint64_t prev_tsc, diff_tsc, cur_tsc, timer_tsc;
-  const uint64_t drain_tsc = (rte_get_tsc_hz() + US_PER_S - 1) / US_PER_S 
-                             * BURST_TX_DRAIN_US;
+  const uint64_t drain_tsc = (rte_get_tsc_hz() + US_PER_S - 1) / US_PER_S * BURST_TX_DRAIN_US;
   
-  RTE_LOG(INFO, MARIO, "[%u] Starting main processing.\n", lcore_id);
-  
+  RTE_LOG(INFO, MARIO, "[%u] Main loop start.\n",lcore_id);
 	prev_tsc = 0;
 	timer_tsc = 0;
   while(1) {
@@ -175,7 +176,7 @@ rmario_main_process(void)
       for(uint8_t port_id = 0; port_id < n_ports; port_id++) {
         uint16_t len = (get_eth_tx_Q(port_id))->len;
 				if (len == 0) continue;
-
+        eth_queue_xmit(port_id, len);
         (get_eth_tx_Q(port_id))->len = 0;
       }
 
@@ -214,26 +215,25 @@ rmario_main_process(void)
 
 #define MAX_ROUTING_TX 32
 static int
-rmario_launch_one_lcore(void)
+rmario_launch_one_lcore(void * unused)
 {
-	RTE_LOG(INFO, MARIO, "[%u] processing launch\n", rte_lcore_id());
-  // decide the number of this core-pooling queue.
+	// RTE_LOG(INFO, MARIO, "[%u] Processing launch\n", rte_lcore_id());
   set_nic_queue_id(rte_lcore_id());
+  struct mbuf_queue *q = create_mbuf_queue(MAX_ROUTING_TX);
+  if (q == NULL) {
+    RTE_LOG(ERR, MARIO, "[%u] fail to create routing queue\n", rte_lcore_id());
+    return EXIT_FAILURE;    
+  }
+  set_routing_Q(q); 
+  
   struct mbuf_queues *qs;
   qs = create_mbuf_queues(rte_eth_dev_count(),  MAX_PKT_BURST);
   if (qs == NULL) {
     RTE_LOG(ERR, MARIO, "[%u] fail to create eth tx queue\n", rte_lcore_id());
     return EXIT_FAILURE;
   }
-  
-  struct mbuf_queue *q = create_mbuf_queue(MAX_ROUTING_TX);
-  if (q == NULL) {
-    RTE_LOG(ERR, MARIO, "[%u] fail to create routing queue\n", rte_lcore_id());
-    return EXIT_FAILURE;    
-  }
-
   set_eth_tx_Qs(qs);
-  set_routing_Q(q);
+  
   rmario_main_process();  
 	return 0;
 }
@@ -379,8 +379,8 @@ main(int argc, char **argv)
   RTE_LOG(INFO, MARIO, "Find %u logical cores\n" , lcore_count);
 
   rmario_pktmbuf_pool = rte_pktmbuf_pool_create("mbuf_pool", NB_MBUF, 32, 0,
-                                              MBUF_DATA_SIZE, 
-                                              rte_socket_id());
+                                                MBUF_DATA_SIZE, 
+                                                rte_socket_id());
   if (rmario_pktmbuf_pool == NULL)
     rte_exit(EXIT_FAILURE, "Cannot init mbuf pool\n");
 
@@ -405,6 +405,11 @@ main(int argc, char **argv)
     rte_exit(EXIT_FAILURE, "Fail to crate l3 interface instances.\n");
   }
 
+  fdb_tb = create_fdb_table(FDB_SIZE);
+  if (fdb_tb == NULL) {
+    rte_exit(EXIT_FAILURE, "Fail to crate fdb table.\n");
+  }
+
   arp_tb = create_arp_table(1 << 20);
   if (arp_tb == NULL) {
     rte_exit(EXIT_FAILURE, "Fail to crate arp table.\n");
@@ -414,6 +419,7 @@ main(int argc, char **argv)
   if (rib == NULL) {
     rte_exit(EXIT_FAILURE, "Fail to crate RIB.\n");
   }
+
  
   /* Load configuration */
   if (load_config("./test_len.conf")) {

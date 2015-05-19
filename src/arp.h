@@ -24,6 +24,13 @@ struct arp_table {
   struct arp_table_entry items[0];
 };
 
+// TODO imple
+static inline bool
+is_expired(struct arp_table_entry* e)
+{
+  return false;
+}
+
 struct arp_table*
 create_arp_table(uint32_t size);
 
@@ -38,13 +45,16 @@ int
 remove_arp_table_entry(struct arp_table* table, const uint32_t *ip_addr);
 
 struct arp_table_entry*
-lookup_arp_entry(struct arp_table* table, const uint32_t *ip_addr);
+lookup_arp_table_entry(struct arp_table* table, const uint32_t *ip_addr);
 
 int
 lookup_bulk_arp_table_entries(struct arp_table *talbe, 
                               const uint32_t **ip_addrs,
                               uint32_t num_entry,
                               struct arp_table_entry** entries);
+
+void
+arp_send_request(struct rte_mbuf* buf, uint32_t dst, uint8_t port_id);
 
 void
 arp_rcv(struct rte_mbuf* buf);

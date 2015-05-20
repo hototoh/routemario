@@ -184,7 +184,7 @@ arp_send_request(struct rte_mbuf* buf, uint32_t tip, uint8_t port_id)
   if (buf == NULL) {
     buf = rte_pktmbuf_alloc(rmario_pktmbuf_pool);
   }
-  
+  RTE_LOG(DEBUG, ARP, "%s port: %u\n", __func__, port_id);
   struct arp_hdr* arphdr;
   struct ether_hdr* eth = rte_pktmbuf_mtod(buf, struct ether_hdr*);
   arphdr = (struct arp_hdr *)(rte_pktmbuf_mtod(buf, char*) + buf->l2_len);
@@ -199,14 +199,25 @@ arp_send_request(struct rte_mbuf* buf, uint32_t tip, uint8_t port_id)
   struct arp_ipv4 *body = &arphdr->arp_data;
   body->arp_tip = tip;
   body->arp_sip = htonl(l3_if->ip_addr);
+  {
+    uint32_t s = ntohl(body->arp_sip);
+    uint32_t d = ntohl(body->arp_tip);
+    RTE_LOG(INFO, ARP,
+            "Source: %u.%u.%u.%u\n"
+            "Target: %u.%u.%u.%u\n",
+            (s >> 24)&0xff,(s >> 16)&0xff,(s >> 8)&0xff,s&0xff,
+            (d >> 24)&0xff,(d >> 16)&0xff,(d >> 8)&0xff,d&0xff
+            );
+
+  }
+
   memset(&body->arp_tha, 0xff, ETHER_ADDR_LEN);
   memset(&eth->d_addr  , 0xff, ETHER_ADDR_LEN);
   ether_addr_copy(&l3_if->mac, &body->arp_sha);
   ether_addr_copy(&l3_if->mac, &eth->s_addr);
   eth->ether_type = htons(ETHER_TYPE_ARP);
-
-  buf->pkt_len = 46;  
-  eth_enqueue_tx_pkt(buf, buf->port);
+  //buf->pkt_len = 46;  
+  eth_enqueue_tx_pkt(buf, port_id);
   return;
 free:
   rte_pktmbuf_free(buf);
@@ -215,6 +226,7 @@ free:
 static void
 arp_request_process(struct rte_mbuf* buf, struct arp_hdr* arphdr)
 {
+  RTE_LOG(WARNING, ARP, "%s\n",  __func__);
   struct ether_hdr*eth;
   struct arp_ipv4 *body = &arphdr->arp_data;
   int port_id = is_own_ip_addr(intfs , ntohl(body->arp_tip));
@@ -242,7 +254,7 @@ arp_request_process(struct rte_mbuf* buf, struct arp_hdr* arphdr)
   eth = rte_pktmbuf_mtod(buf, struct ether_hdr *);
   ether_addr_copy(&body->arp_tha, &eth->d_addr);
   ether_addr_copy(&body->arp_sha, &eth->s_addr);
-  buf->pkt_len = 46;
+  //buf->pkt_len = 46;
   /*
   {
     uint8_t *a = (body->arp_sha).addr_bytes;
@@ -277,10 +289,9 @@ static void
 arp_reply_process(struct rte_mbuf* buf, struct arp_hdr* arphdr)
                   
 {
+  RTE_LOG(WARNING, ARP, "%s\n",  __func__);
   int res = 0;
-  struct ether_addr mac;
   struct arp_ipv4 *body = &arphdr->arp_data;
-  rte_eth_macaddr_get(buf->port, &mac);
 
   res = add_arp_table_entry(arp_tb, &body->arp_sip, &body->arp_sha);  
   if (res) 

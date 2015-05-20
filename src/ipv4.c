@@ -44,51 +44,34 @@
 
 RTE_DEFINE_PER_LCORE(struct mbuf_queue*, routing_queue);
 
-static uint16_t
-calc_checksum(uint16_t *buf, uint32_t len)
-{
-  uint32_t sum = 0;
-
-  while (len > 1) {
-    sum += *buf;
-    buf++;
-    len -= 2;
-  }
-  if (len == 1) 
-    sum += *(uint8_t*) buf;
-
-  sum = (sum & 0xffff) + (sum >> 16);
-  sum = (sum & 0xffff) + (sum >> 16);
-
-  return (uint16_t) ~sum;
-}
-
 static int
 ip_routing(struct mbuf_queue* rqueue)
 {
   struct rte_mbuf **queue = rqueue->queue;
   uint16_t len = rqueue->len;
+  RTE_LOG(DEBUG, IPV4, "%s: qlen: %u\n", __func__, len);
   for (uint16_t i = 0; i < len; i++) {
     struct rte_mbuf *buf = queue[i];
     struct ipv4_hdr *iphdr;
-    iphdr = (struct ipv4_hdr*) rte_pktmbuf_mtod(buf, char*) + buf->l2_len;
-                                 
-    uint32_t dst = iphdr->dst_addr;
-    /* dst is our subnet */
+    iphdr = (struct ipv4_hdr*) (rte_pktmbuf_mtod(buf, char*) + buf->l2_len);
+    uint32_t dst = ntohl(iphdr->dst_addr);
 
+    /* dst is our subnet */
     uint8_t next_index;
-    if(rte_lpm_lookup(rib, dst, &next_index) != 0) {
-      //RTE_LOG(INFO, IPV4, "not matched lpm lookup\n");
+    int res = rte_lpm_lookup(rib, dst, &next_index);
+    RTE_LOG(DEBUG, IPV4, "%s res=%d\n", __func__, res);
+    if(res != 0) {
+      RTE_LOG(INFO, IPV4, "not matched lpm lookup\n");
       rte_pktmbuf_free(buf);
       continue;
     }
     
     uint32_t next_hop = next_hop_tb[next_index];
-    uint8_t dst_port = is_own_subnet(intfs, next_hop);
+    int dst_port = is_own_subnet(intfs, next_hop);
     if(dst_port < 0) {
       rte_pktmbuf_free(buf);
       continue;
-    }
+    }    
     iphdr->hdr_checksum = 0;
     iphdr->hdr_checksum = rte_ipv4_cksum(iphdr);
     eth_enqueue_tx_pkt(buf, dst_port);    
@@ -100,9 +83,20 @@ ip_routing(struct mbuf_queue* rqueue)
 int
 ip_enqueue_routing_pkt(struct mbuf_queue* rqueue, struct rte_mbuf* buf)
 {
-  struct mbuf_queue *r_queue = get_routing_Q();
-  r_queue->queue[(r_queue->len)++] = buf;  
-  return r_queue->len == r_queue->max ? 1 : 0;
+  struct ipv4_hdr *iphdr;
+  iphdr = (struct ipv4_hdr*) (rte_pktmbuf_mtod(buf, char *) + buf->l2_len);
+    {
+      uint32_t d = ntohl(iphdr->dst_addr);
+      uint32_t s = ntohl(iphdr->src_addr);
+      RTE_LOG(INFO, IPV4, "%s(%d):%u.%u.%u.%u -> %u.%u.%u.%u\n",
+              __func__, __LINE__, 
+              (s >> 24)&0xff,(s >> 16)&0xff,(s >> 8)&0xff,s&0xff,
+              (d >> 24)&0xff,(d>> 16)&0xff,(d >> 8)&0xff,d&0xff);
+    }
+
+  RTE_LOG(DEBUG, IPV4, "%s:\n", __func__);
+  rqueue->queue[(rqueue->len)++] = buf;  
+  return rqueue->len == rqueue->max ? 1 : 0;
 }
 
 void

@@ -78,7 +78,7 @@ ip_routing(struct mbuf_queue* rqueue)
 
     uint8_t next_index;
     if(rte_lpm_lookup(rib, dst, &next_index) != 0) {
-      RTE_LOG(INFO, IPV4, "not matched lpm lookup\n");
+      //RTE_LOG(INFO, IPV4, "not matched lpm lookup\n");
       rte_pktmbuf_free(buf);
       continue;
     }
@@ -130,7 +130,6 @@ ip_rcv(struct rte_mbuf **bufs, uint16_t n_rx)
   RTE_LOG(INFO, IPV4, "%s %u packet(s)\n", __func__, n_rx);
   struct mbuf_queue *rq = get_routing_Q();
   for (uint16_t i = 0; i < n_rx; i++) {
-    int res = 0;
     struct ipv4_hdr *iphdr;
     uint32_t ndst;
     struct rte_mbuf *buf = bufs[i];
@@ -138,7 +137,6 @@ ip_rcv(struct rte_mbuf **bufs, uint16_t n_rx)
     buf->l3_len = (iphdr->version_ihl & IPV4_HDR_IHL_MASK) << 2;    
     
     /* packets to this host. */
-    /*
     {
       uint32_t d = ntohl(iphdr->dst_addr);
       uint32_t s = ntohl(iphdr->src_addr);
@@ -146,8 +144,22 @@ ip_rcv(struct rte_mbuf **bufs, uint16_t n_rx)
               (s >> 24)&0xff,(s >> 16)&0xff,(s >> 8)&0xff,s&0xff,
               (d >> 24)&0xff,(d>> 16)&0xff,(d >> 8)&0xff,d&0xff);
     }
-    */
+    
+    /* ignore braodcast */
     ndst = ntohl(iphdr->dst_addr);
+    if (IPV4_BROADCAST <= ndst) {
+      RTE_LOG(DEBUG, IPV4, "ignore broadcast.");
+      rte_pktmbuf_free(buf);
+      continue;
+    }
+    
+    /* checksum check */
+    uint16_t res = ~rte_ipv4_cksum(iphdr);
+    if (res) {
+      rte_pktmbuf_free(buf);
+      continue;
+    }
+
     int port_id = is_own_ip_addr(intfs, ndst);
     if(port_id >= 0) {      
       switch(iphdr->next_proto_id) {
@@ -179,8 +191,7 @@ ip_rcv(struct rte_mbuf **bufs, uint16_t n_rx)
       continue;
     }
 
-    res = ip_enqueue_routing_pkt(rq, buf);
-    if (unlikely(res)) {
+    if (unlikely(ip_enqueue_routing_pkt(rq, buf))) {
       ip_routing(rq);
     }
   }  

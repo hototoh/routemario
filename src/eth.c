@@ -53,7 +53,6 @@ __eth_enqueue_tx_pkt(struct rte_mbuf *buf, uint8_t dst_port)
   tx_queue->queue[len++] = buf;
   
   if (unlikely(len == tx_queue->max)) {
-    RTE_LOG(DEBUG, ETH, "Port-%u queue is full\n", dst_port);
     eth_queue_xmit(dst_port, len);
     len = 0;
   }

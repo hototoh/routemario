@@ -49,7 +49,6 @@ ip_routing(struct mbuf_queue* rqueue)
 {
   struct rte_mbuf **queue = rqueue->queue;
   uint16_t len = rqueue->len;
-  RTE_LOG(DEBUG, IPV4, "%s: qlen: %u\n", __func__, len);
   for (uint16_t i = 0; i < len; i++) {
     struct rte_mbuf *buf = queue[i];
     struct ipv4_hdr *iphdr;
@@ -59,9 +58,8 @@ ip_routing(struct mbuf_queue* rqueue)
     /* dst is our subnet */
     uint8_t next_index;
     int res = rte_lpm_lookup(rib, dst, &next_index);
-    RTE_LOG(DEBUG, IPV4, "%s res=%d\n", __func__, res);
     if(res != 0) {
-      RTE_LOG(INFO, IPV4, "not matched lpm lookup\n");
+      RTE_LOG(DEBUG, IPV4, "not matched lpm lookup\n");
       rte_pktmbuf_free(buf);
       continue;
     }
@@ -74,7 +72,7 @@ ip_routing(struct mbuf_queue* rqueue)
     }    
     iphdr->hdr_checksum = 0;
     iphdr->hdr_checksum = rte_ipv4_cksum(iphdr);
-    eth_enqueue_tx_pkt(buf, dst_port);    
+    eth_enqueue_tx_pkt(buf, dst_port);
   }
   rqueue->len = 0;
   return 0;
@@ -85,16 +83,6 @@ ip_enqueue_routing_pkt(struct mbuf_queue* rqueue, struct rte_mbuf* buf)
 {
   struct ipv4_hdr *iphdr;
   iphdr = (struct ipv4_hdr*) (rte_pktmbuf_mtod(buf, char *) + buf->l2_len);
-    {
-      uint32_t d = ntohl(iphdr->dst_addr);
-      uint32_t s = ntohl(iphdr->src_addr);
-      RTE_LOG(INFO, IPV4, "%s(%d):%u.%u.%u.%u -> %u.%u.%u.%u\n",
-              __func__, __LINE__, 
-              (s >> 24)&0xff,(s >> 16)&0xff,(s >> 8)&0xff,s&0xff,
-              (d >> 24)&0xff,(d>> 16)&0xff,(d >> 8)&0xff,d&0xff);
-    }
-
-  RTE_LOG(DEBUG, IPV4, "%s:\n", __func__);
   rqueue->queue[(rqueue->len)++] = buf;  
   return rqueue->len == rqueue->max ? 1 : 0;
 }
@@ -107,11 +95,13 @@ ip_enqueue_pkt(struct mbuf_queue* rqueue, struct rte_mbuf* buf)
 
   int dst_port = is_own_subnet(intfs, ntohl(iphdr->dst_addr));
   if(dst_port < 0) {
+    RTE_LOG(DEBUG, IPV4, "not own subnet\n");
     int res = ip_enqueue_routing_pkt(rqueue, buf);
     if(res) ip_routing(rqueue);
     return;
   }
 
+  RTE_LOG(DEBUG, IPV4, "own subnet\n");
   iphdr->hdr_checksum = 0;
   iphdr->hdr_checksum = rte_ipv4_cksum(iphdr);
   eth_enqueue_tx_pkt(buf, dst_port);

@@ -48,7 +48,6 @@ eth_queue_xmit(uint8_t dst_port, uint16_t n)
 static void
 __eth_enqueue_tx_pkt(struct rte_mbuf *buf, uint8_t dst_port)
 {
-  RTE_LOG(INFO, ETH, "%s: %u\n", __func__, buf->pkt_len);
   struct mbuf_queue* tx_queue = get_eth_tx_Q(dst_port);  
   uint16_t len = tx_queue->len;
   tx_queue->queue[len++] = buf;
@@ -75,22 +74,43 @@ eth_enqueue_tx_pkt(struct rte_mbuf *buf, uint8_t dst_port)
       struct ipv4_hdr *iphdr;
       struct arp_table_entry *entry;
       iphdr = (struct ipv4_hdr*) (rte_pktmbuf_mtod(buf, char*) + buf->l2_len);
+
+      // is in L2 braodcast domain
+      uint32_t dst = ntohl(iphdr->dst_addr);
+      int dst_port = is_own_subnet(intfs, dst);
+      if (dst_port >= 0) {
+        entry = lookup_arp_table_entry(arp_tb, &iphdr->dst_addr);
+        if (entry == NULL || (is_expired(entry))) {
+          int dst_port = is_own_subnet(intfs, dst);
+          if(dst_port < 0) {
+            rte_pktmbuf_free(buf);
+            return ;
+          }  
+          buf->port = dst_port;
+          
+          arp_send_request(buf, iphdr->dst_addr, dst_port);
+          return;
+        }
+        ether_addr_copy(&entry->eth_addr, &eth->d_addr);
+        break;
+      }
+
       uint8_t next_index;
       int res = rte_lpm_lookup(rib, ntohl(iphdr->dst_addr), &next_index);
-      if (res != 0) {
+      if (res != 0 ) {
         rte_pktmbuf_free(buf);
         return ;
       }
-      uint32_t next_hop = htonl(next_hop_tb[next_index]);
 
+      uint32_t next_hop = htonl(next_hop_tb[next_index]);
       entry = lookup_arp_table_entry(arp_tb, &next_hop);
       if (entry == NULL || (is_expired(entry))) {
-        RTE_LOG(INFO, ETH, "does not exist arp entry\n");
         int dst_port = is_own_subnet(intfs, ntohl(next_hop));
+        RTE_LOG(INFO, ETH, "does not exist arp entry\n");
         if(dst_port < 0) {
           rte_pktmbuf_free(buf);
           return ;
-        }    
+        }  
         buf->port = dst_port;
 
         arp_send_request(buf, next_hop, dst_port);

@@ -131,7 +131,6 @@ rmario_main_process(void)
       unsigned n_rx = rte_eth_rx_burst(port_id, (uint16_t) lcore_id,
                                        pkt_burst, MAX_PKT_BURST);
       if (n_rx == 0) continue;
-      RTE_LOG(INFO, MARIO, "rx queue %u\n", get_nic_queue_id());
       if (port_id == _mid) // external port
         eth_input(pkt_burst, n_rx, port_id);
       else { // internal port

@@ -1,6 +1,6 @@
 /**
-0;95;c* Hiroshi Tokaku <tkk@hongo.wide.ad.jp>
-**/
+ * Hiroshi Tokaku <tkk@hongo.wide.ad.jp>
+ **/
 
 #include <stdio.h>
 #include <stdint.h>
@@ -484,6 +484,39 @@ main(int argc, char **argv)
   }
 
 	check_all_ports_link_status(n_ports);
+
+  /**
+   * L2 filter 
+   */
+  struct rte_eth_flex_filter filter;  
+  filter.len = 8;
+  for(i = 0; i < 6; i++){
+    filter.bytes[i] = (uint8_t)0xff;
+    //filter.bytes[i] = (uint8_t)0xdd;
+  }
+  filter.bytes[6] = (uint8_t)0xdd;
+  filter.bytes[7] = (uint8_t)0xdd;
+  for(i = 0; i < 1; i++){
+    filter.mask[i] = (uint8_t)0b11111100;
+  }
+  for(i = 1; i < 8; i++){
+    filter.bytes[i] = (uint8_t)0x00;
+  }
+  filter.priority = 1;
+  filter.queue = 1;
+  ret  = rte_eth_dev_filter_ctrl(0, 
+      RTE_ETH_FILTER_FLEXIBLE,
+      RTE_ETH_FILTER_ADD,
+      &filter);
+  ret  = rte_eth_dev_filter_ctrl(2, 
+      RTE_ETH_FILTER_FLEXIBLE,
+      RTE_ETH_FILTER_ADD,
+      &filter);
+  ret  = rte_eth_dev_filter_ctrl(3, 
+      RTE_ETH_FILTER_FLEXIBLE,
+      RTE_ETH_FILTER_ADD,
+      &filter);
+
 
 	/* launch per-lcore init on every lcore */
   rte_eal_mp_remote_launch(rmario_launch_one_lcore, NULL, CALL_MASTER);

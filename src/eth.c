@@ -21,6 +21,7 @@
 #include "mbuf_queue.h"
 #include "fdb.h"
 #include "ipv4.h"
+#include "vlb.h"
 #include "global_mario.h"
 
 #define RTE_LOGTYPE_ETH RTE_LOGTYPE_USER1
@@ -45,7 +46,7 @@ eth_queue_xmit(uint8_t dst_port, uint16_t n)
   return ;
 }
 
-static void
+void
 __eth_enqueue_tx_pkt(struct rte_mbuf *buf, uint8_t dst_port)
 {
   struct mbuf_queue* tx_queue = get_eth_tx_Q(dst_port);  
@@ -123,6 +124,10 @@ eth_enqueue_tx_pkt(struct rte_mbuf *buf, uint8_t dst_port)
   }
 
   //buf->pkt_len += ETHER_HDR_LEN;
+  if (dst_port != _mid) {
+    ether_addr_copy(&eth->d_addr, &eth->s_addr);
+    eth->d_addr.addr_bytes[0] = (uint8_t)(0xf + (dst_port << 4));
+  }
   __eth_enqueue_tx_pkt(buf, dst_port);
 }
 
@@ -176,31 +181,61 @@ eth_input(struct rte_mbuf** bufs, uint16_t n_rx, uint8_t src_port)
   struct ether_addr mac;
   rte_eth_macaddr_get(src_port, &mac);
   for(uint32_t i = 0; i < n_rx; i++) {
-    struct rte_mbuf* pkt = bufs[i];
-    rte_prefetch0(rte_pktmbuf_mtod(pkt, void *));
+    struct rte_mbuf* buf = bufs[i];
+    rte_prefetch0(rte_pktmbuf_mtod(buf, void *));
     
-    struct ether_hdr *eth = rte_pktmbuf_mtod(pkt, struct ether_hdr *);
+    struct ether_hdr *eth = rte_pktmbuf_mtod(buf, struct ether_hdr *);
     //RTE_LOG(INFO, ETH, "[Port %u] length of type: %x\n",
-    // pkt->port, ntohs(eth->ether_type));
-    pkt->l2_len = ETHER_HDR_LEN;    
+    // buf->port, ntohs(eth->ether_type));
+    buf->l2_len = ETHER_HDR_LEN;    
     if((!is_same_ether_addr(&eth->d_addr, &mac)) &&
        (!is_broadcast_ether_addr(&eth->d_addr))) {
-      rte_pktmbuf_free(pkt);
+      rte_pktmbuf_free(buf);
       continue;
     }
     switch (ntohs(eth->ether_type)) {
       case ETHER_TYPE_ARP: {
-        arp_rcv(pkt);
+        arp_rcv(buf);
         continue;
       }
       case ETHER_TYPE_IPv4: {
-        ip_rcv(&pkt, 1);
+        // XXX
+        ip_rcv(&buf, 1);
         continue;
       }
       case ETHER_TYPE_IPv6: {
         ;
       }
     }
-    rte_pktmbuf_free(pkt);
+    rte_pktmbuf_free(buf);
+  }
+}
+
+void
+eth_internal_input(struct rte_mbuf** bufs, uint16_t n_rx, uint8_t src_port)
+{
+  struct ether_addr mac;
+  uint8_t dst_port = get_nic_queue_id();
+  rte_eth_macaddr_get(dst_port, &mac);
+  for(uint32_t i = 0; i < n_rx; i++) {
+    struct rte_mbuf* buf = bufs[i];
+    rte_prefetch0(rte_pktmbuf_mtod(buf, void *));
+
+    struct ether_hdr *eth = rte_pktmbuf_mtod(buf, struct ether_hdr *);
+    buf->l2_len = ETHER_HDR_LEN;
+    switch (ntohs(eth->ether_type)) {
+      case ETHER_TYPE_ARP: {
+        arp_internal_rcv(buf);
+        continue;
+      }
+    }
+
+    ether_addr_copy(&eth->s_addr, &eth->d_addr);
+    ether_addr_copy(&mac, &eth->s_addr);
+    if (get_nic_queue_id() == _mid){ // to external port
+      eth_enqueue_tx_pkt(buf, dst_port);
+    }
+
+    __eth_enqueue_tx_pkt(buf, dst_port);
   }
 }

@@ -16,7 +16,7 @@
 #include "arp.h"
 
 extern struct rte_mempool *rmario_pktmbuf_pool;
-
+extern uint8_t _mid;
 /* eth.h */
 RTE_DECLARE_PER_LCORE(uint16_t, nic_queue_id);
 static inline uint16_t

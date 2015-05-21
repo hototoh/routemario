@@ -210,7 +210,6 @@ arp_send_request(struct rte_mbuf* buf, uint32_t tip, uint8_t port_id)
             );
 
   }
-
   memset(&body->arp_tha, 0xff, ETHER_ADDR_LEN);
   memset(&eth->d_addr  , 0xff, ETHER_ADDR_LEN);
   ether_addr_copy(&l3_if->mac, &body->arp_sha);
@@ -286,7 +285,7 @@ out:
 }
 
 static void
-arp_reply_process(struct rte_mbuf* buf, struct arp_hdr* arphdr)
+arp_reply_process(struct rte_mbuf* buf, struct arp_hdr* arphdr, bool internal)
                   
 {
   RTE_LOG(WARNING, ARP, "%s\n",  __func__);
@@ -297,7 +296,19 @@ arp_reply_process(struct rte_mbuf* buf, struct arp_hdr* arphdr)
   if (res) 
     RTE_LOG(WARNING, ARP, "fail to add arp entry\n");
   
-  rte_pktmbuf_free(buf);
+  if (internal) return ;
+
+  // broadcast to all the other nodes
+  uint8_t port_num = rte_eth_dev_count();
+  for (uint8_t port_id = 0, i = 0; port_id < port_num; port_id++) {
+    if (port_id == buf->port) continue;
+    
+    struct rte_mbuf* _buf = buf;
+    if(++i != (port_num - 1))
+       _buf = rte_pktmbuf_clone(buf, rmario_pktmbuf_pool);
+    
+    __eth_enqueue_tx_pkt(buf, port_id);
+  }
 }
 
 void
@@ -317,7 +328,48 @@ arp_rcv(struct rte_mbuf* buf)
       return ;
     }
     case ARP_OP_REPLY: {
-      arp_reply_process(buf, arphdr);      
+      arp_reply_process(buf, arphdr, false);
+      return ;
+    }
+  }
+  rte_pktmbuf_free(buf);
+}
+
+static void
+arp_internal_request_process(struct rte_mbuf* buf, struct arp_hdr* arphdr)
+{
+  uint8_t dst_port = get_nic_queue_id();
+  if(get_nic_queue_id() == _mid) {
+    struct ether_addr mac;
+    rte_eth_macaddr_get(dst_port, &mac);
+
+    struct ether_hdr *eth = rte_pktmbuf_mtod(buf, struct ether_hdr *);
+    struct arp_ipv4 *body = &arphdr->arp_data;
+    ether_addr_copy(&mac, &body->arp_sha);
+    memset(&eth->d_addr  , 0xff, ETHER_ADDR_LEN);
+    ether_addr_copy(&mac, &eth->s_addr);
+  }
+  __eth_enqueue_tx_pkt(buf, dst_port); 
+}
+
+void
+arp_internal_rcv(struct rte_mbuf* buf)
+{
+  RTE_LOG(INFO, ARP, "%s\n", __func__);
+  struct arp_hdr* arphdr;
+  arphdr = (struct arp_hdr *) (rte_pktmbuf_mtod(buf, char*) + buf->l2_len);
+  if (ntohs(arphdr->arp_hrd) != ARP_HRD_ETHER ||
+      ntohs(arphdr->arp_pro) != ETHER_TYPE_IPv4 ||
+      arphdr->arp_hln        != ETHER_ADDR_LEN ||
+      arphdr->arp_pln        != sizeof(uint32_t) ) return ;
+
+  switch(ntohs(arphdr->arp_op)) {
+    case ARP_OP_REQUEST: {
+      arp_internal_request_process(buf, arphdr);
+      return ;
+    }
+    case ARP_OP_REPLY: {
+      arp_reply_process(buf, arphdr, true);      
       return ;
     }
   }

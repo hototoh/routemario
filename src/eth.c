@@ -235,12 +235,12 @@ eth_internal_input(struct rte_mbuf** bufs, uint16_t n_rx, uint8_t src_port)
     if (get_nic_queue_id() == _mid){ // to external port
       {
         uint8_t* a = (eth->s_addr).addr_bytes;
-        RTE_LOG(DEBUG, ARP, 
+        RTE_LOG(DEBUG, ETH, 
                 "%s MAC src %02x:%02x:%02x:%02x:%02x:%02x\n",
                 __func__, a[0], a[1], a[2], a[3], a[4], a[5]);
         
         a = (eth->d_addr).addr_bytes;
-        RTE_LOG(DEBUG, ARP, 
+        RTE_LOG(DEBUG, ETH, 
                 "%s MAC dst %02x:%02x:%02x:%02x:%02x:%02x\n",
                 __func__, a[0], a[1], a[2], a[3], a[4], a[5]);
         

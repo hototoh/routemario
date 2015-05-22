@@ -86,7 +86,7 @@ eth_enqueue_tx_pkt(struct rte_mbuf *buf, uint8_t dst_port)
           if(dst_port < 0) {
             rte_pktmbuf_free(buf);
             return ;
-          }  
+          } 
           buf->port = dst_port;
           
           arp_send_request(buf, iphdr->dst_addr, dst_port);
@@ -235,8 +235,7 @@ eth_internal_input(struct rte_mbuf** bufs, uint16_t n_rx, uint8_t src_port)
       }
     }
 
-    ether_addr_copy(&eth->s_addr, &eth->d_addr);
-    ether_addr_copy(&mac, &eth->s_addr);
+    RTE_LOG(DEBUG, ETH, "%s (%u) %u -> %u\n", __func__, __LINE__,  buf->port, dst_port);
     if (get_nic_queue_id() == _mid){ // internal -> external port
       /*
       {
@@ -251,12 +250,13 @@ eth_internal_input(struct rte_mbuf** bufs, uint16_t n_rx, uint8_t src_port)
                 __func__, a[0], a[1], a[2], a[3], a[4], a[5]);
         
       }
-      */
+      //*/
       eth_enqueue_tx_pkt(buf, dst_port);
       continue;
-    }
+    } else {
 
     // internal -> internal
     __eth_enqueue_tx_pkt(buf, dst_port);
+    }
   }
 }

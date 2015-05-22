@@ -184,7 +184,6 @@ arp_send_request(struct rte_mbuf* buf, uint32_t tip, uint8_t port_id)
   if (buf == NULL) {
     buf = rte_pktmbuf_alloc(rmario_pktmbuf_pool);
   }
-  RTE_LOG(DEBUG, ARP, "%s port: %u\n", __func__, port_id);
   struct arp_hdr* arphdr;
   struct ether_hdr* eth = rte_pktmbuf_mtod(buf, struct ether_hdr*);
   arphdr = (struct arp_hdr *)(rte_pktmbuf_mtod(buf, char*) + buf->l2_len);
@@ -199,17 +198,6 @@ arp_send_request(struct rte_mbuf* buf, uint32_t tip, uint8_t port_id)
   struct arp_ipv4 *body = &arphdr->arp_data;
   body->arp_tip = tip;
   body->arp_sip = htonl(l3_if->ip_addr);
-  {
-    uint32_t s = ntohl(body->arp_sip);
-    uint32_t d = ntohl(body->arp_tip);
-    RTE_LOG(INFO, ARP,
-            "Source: %u.%u.%u.%u\n"
-            "Target: %u.%u.%u.%u\n",
-            (s >> 24)&0xff,(s >> 16)&0xff,(s >> 8)&0xff,s&0xff,
-            (d >> 24)&0xff,(d >> 16)&0xff,(d >> 8)&0xff,d&0xff
-            );
-
-  }
   memset(&body->arp_tha, 0xff, ETHER_ADDR_LEN);
   memset(&eth->d_addr  , 0xff, ETHER_ADDR_LEN);
   ether_addr_copy(&l3_if->mac, &body->arp_sha);
@@ -225,7 +213,6 @@ free:
 static void
 arp_request_process(struct rte_mbuf* buf, struct arp_hdr* arphdr)
 {
-  RTE_LOG(WARNING, ARP, "%s\n",  __func__);
   struct ether_hdr*eth;
   struct arp_ipv4 *body = &arphdr->arp_data;
   int port_id = is_own_ip_addr(intfs , ntohl(body->arp_tip));
@@ -256,6 +243,7 @@ arp_request_process(struct rte_mbuf* buf, struct arp_hdr* arphdr)
   //buf->pkt_len = 46;
   /*
   {
+    struct arp_ipv4 *body = &arphdr->arp_data;
     uint8_t *a = (body->arp_sha).addr_bytes;
     RTE_LOG(DEBUG, ARP, 
             "ARP src %02x:%02x:%02x:%02x:%02x:%02x\n",
@@ -288,7 +276,6 @@ static void
 arp_reply_process(struct rte_mbuf* buf, struct arp_hdr* arphdr, bool internal)
                   
 {
-  RTE_LOG(WARNING, ARP, "%s\n",  __func__);
   int res = 0;
   struct arp_ipv4 *body = &arphdr->arp_data;
 
@@ -314,7 +301,6 @@ arp_reply_process(struct rte_mbuf* buf, struct arp_hdr* arphdr, bool internal)
 void
 arp_rcv(struct rte_mbuf* buf)
 {
-  RTE_LOG(INFO, ARP, "%s\n", __func__);
   struct arp_hdr* arphdr;
   arphdr = (struct arp_hdr *) (rte_pktmbuf_mtod(buf, char*) + buf->l2_len);
   if (ntohs(arphdr->arp_hrd) != ARP_HRD_ETHER ||
@@ -355,14 +341,14 @@ arp_internal_request_process(struct rte_mbuf* buf, struct arp_hdr* arphdr)
 void
 arp_internal_rcv(struct rte_mbuf* buf)
 {
-  RTE_LOG(INFO, ARP, "%s\n", __func__);
   struct arp_hdr* arphdr;
   arphdr = (struct arp_hdr *) (rte_pktmbuf_mtod(buf, char*) + buf->l2_len);
   if (ntohs(arphdr->arp_hrd) != ARP_HRD_ETHER ||
       ntohs(arphdr->arp_pro) != ETHER_TYPE_IPv4 ||
       arphdr->arp_hln        != ETHER_ADDR_LEN ||
       arphdr->arp_pln        != sizeof(uint32_t) ) return ;
-
+    
+      
   switch(ntohs(arphdr->arp_op)) {
     case ARP_OP_REQUEST: {
       arp_internal_request_process(buf, arphdr);

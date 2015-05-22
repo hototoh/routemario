@@ -124,10 +124,15 @@ eth_enqueue_tx_pkt(struct rte_mbuf *buf, uint8_t dst_port)
   }
 
   //buf->pkt_len += ETHER_HDR_LEN;
-  if (dst_port != _mid) {
+  if (dst_port != _mid) { // -> internal
     ether_addr_copy(&eth->d_addr, &eth->s_addr);
     eth->d_addr.addr_bytes[0] = (uint8_t)(0xf + (dst_port << 4));
+    if (buf->port == _mid) { // external -> internal
+      dst_port = forwarding_node_id(buf->hash.rss);
+      RTE_LOG(DEBUG, ETH, "RSS(?): %u, PORT: %u\n", buf->hash.rss, dst_port);
+    }
   }
+
   __eth_enqueue_tx_pkt(buf, dst_port);
 }
 
@@ -232,7 +237,8 @@ eth_internal_input(struct rte_mbuf** bufs, uint16_t n_rx, uint8_t src_port)
 
     ether_addr_copy(&eth->s_addr, &eth->d_addr);
     ether_addr_copy(&mac, &eth->s_addr);
-    if (get_nic_queue_id() == _mid){ // to external port
+    if (get_nic_queue_id() == _mid){ // internal -> external port
+      /*
       {
         uint8_t* a = (eth->s_addr).addr_bytes;
         RTE_LOG(DEBUG, ETH, 
@@ -245,10 +251,12 @@ eth_internal_input(struct rte_mbuf** bufs, uint16_t n_rx, uint8_t src_port)
                 __func__, a[0], a[1], a[2], a[3], a[4], a[5]);
         
       }
+      */
       eth_enqueue_tx_pkt(buf, dst_port);
       continue;
     }
 
+    // internal -> internal
     __eth_enqueue_tx_pkt(buf, dst_port);
   }
 }

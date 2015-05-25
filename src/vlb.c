@@ -19,7 +19,7 @@
 #include "global_mario.h"
 
 #define VLB_SIZE (1 << 20)
-#define EXPIRE_TIME (3 << 27) 
+#define EXPIRE_TIME (3ULL << 35) 
 #define NODE_SIZE (4)
 
 #define RTE_LOGTYPE_VLB RTE_LOGTYPE_USER1
@@ -45,8 +45,6 @@ forwarding_node_id(uint32_t rss)
   if (!info->expire || gap > EXPIRE_TIME) {
     info->node_id = next_node_id();
   }
-
-  RTE_LOG(DEBUG, VLB, "gap %lu\n", gap);
   info->expire = now;
   return info->node_id;
 }

@@ -204,7 +204,7 @@ arp_send_request(struct rte_mbuf* buf, uint32_t tip, uint8_t port_id)
   ether_addr_copy(&l3_if->mac, &eth->s_addr);
   eth->ether_type = htons(ETHER_TYPE_ARP);
   //buf->pkt_len = 46;  
-  eth_enqueue_tx_pkt(buf, port_id);
+  __eth_enqueue_tx_pkt(buf, port_id);
   return;
 free:
   rte_pktmbuf_free(buf);
@@ -266,7 +266,7 @@ arp_request_process(struct rte_mbuf* buf, struct arp_hdr* arphdr)
     
   }
   // */
-  eth_enqueue_tx_pkt(buf, buf->port);
+  __eth_enqueue_tx_pkt(buf, buf->port);
   return ;
 out:
   rte_pktmbuf_free(buf);

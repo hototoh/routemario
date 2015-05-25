@@ -153,6 +153,7 @@ ip_rcv(struct rte_mbuf **bufs, uint16_t n_rx)
         }
         case IPPROTO_TCP: 
         case IPPROTO_UDP: 
+          RTE_LOG(DEBUG, IPV4, " %s %u ip_routing\n", __func__, __LINE__);
           ;
       }
       rte_pktmbuf_free(buf);
@@ -176,6 +177,7 @@ ip_rcv(struct rte_mbuf **bufs, uint16_t n_rx)
     }
 
     if (unlikely(ip_enqueue_routing_pkt(rq, buf))) {
+      RTE_LOG(DEBUG, IPV4, " %s %u ip_routing\n", __func__, __LINE__);
       ip_routing(rq);
     }
   }  

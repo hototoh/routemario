@@ -30,6 +30,28 @@ RTE_DEFINE_PER_LCORE(struct mbuf_queues *, eth_tx_queue);
 RTE_DEFINE_PER_LCORE(uint16_t, nic_queue_id);
 
 void
+rewrite_mac_addr(struct rte_mbuf *buf, uint8_t dst_port)
+{
+  if(dst_port < 0) 
+    rte_pktmbuf_free(buf);
+
+  struct ether_addr mac;
+  rte_eth_macaddr_get(dst_port, &mac);
+
+  struct ip_hdr *iphdr;
+  struct arp_table_entry *entry;
+  struct ether_hdr *eth = rte_pktmbuf_mtod(buf, struct ether_hdr *);
+  iphdr = (struct ipv4_hdr*) (rte_pktmbuf_mtod(buf, char *) + buf->l2_len);
+  entry = lookup_arp_table_entry(arp_tb, &iphdr->dst_addr);
+  if (entry == NULL || (is_expired(entry))) {
+    arp_send_request(buf, iphdr->dst_addr, dst_port);
+    return;
+  }
+  ether_addr_copy(&entry->eth_addr, &eth->d_addr);
+  ether_addr_copy(&mac, &eth->s_addr);   
+}
+
+void
 eth_queue_xmit(uint8_t dst_port, uint16_t n)
 {
   uint16_t ret;  

@@ -15,7 +15,8 @@
 #define MAX_PKT_BURST 1
 #define MAX_PORT 4
 
-
+void
+rewrite_mac_addr(struct rte_mbuf *buf, uint8_t dst_port);
 
 void
 eth_input(struct rte_mbuf** bufs, uint16_t n_rx, uint8_t src_port);
@@ -26,16 +27,15 @@ eth_internal_input(struct rte_mbuf** bufs, uint16_t n_rx, uint8_t src_port);
 void
 __eth_enqueue_tx_pkt(struct rte_mbuf *buf, uint8_t dst_port);
 
-static inline void
-__eth_random_enqueue_tx_pkt(struct rte_mbuf *buf)
-{
-  uint8_t dst_port = forwarding_node_id(buf->hash.rss);
-  __eth_enqueue_tx_pkt(buf, dst_port);
-}
+void
+eth_random_enqueue_tx_pkt(struct rte_mbuf *buf, uint8_t dst_port);
 
 /* this function is called from upper layer function */
 void
 eth_enqueue_tx_pkt(struct rte_mbuf *buf, uint8_t dst_port);
+
+void
+eth_enqueue_tx_packet(struct rte_mbuf *buf, uint8_t dst_port);
 
 /* this function is called from main loop function */
 void

@@ -70,10 +70,12 @@ ip_routing(struct mbuf_queue* rqueue)
     if(dst_port < 0) {
       rte_pktmbuf_free(buf);
       continue;
-    }    
+    }
+
     iphdr->hdr_checksum = 0;
     iphdr->hdr_checksum = rte_ipv4_cksum(iphdr);
-    eth_enqueue_tx_pkt(buf, dst_port);
+    rewrite_mac_addr(buf, dst_port);
+    eth_enqueue_tx_packet(buf, dst_port);
   }
   rqueue->len = 0;
   return 0;
@@ -105,7 +107,8 @@ ip_enqueue_pkt(struct mbuf_queue* rqueue, struct rte_mbuf* buf)
   RTE_LOG(DEBUG, IPV4, "own subnet\n");
   iphdr->hdr_checksum = 0;
   iphdr->hdr_checksum = rte_ipv4_cksum(iphdr);
-  eth_enqueue_tx_pkt(buf, dst_port);
+  rewrite_mac_addr(buf, dst_port);
+  eth_enqueue_tx_packet(buf, dst_port);
 }
 
 
@@ -173,26 +176,8 @@ ip_rcv(struct rte_mbuf **bufs, uint16_t n_rx)
     if(dst_port >= 0) {
       iphdr->hdr_checksum = 0;
       iphdr->hdr_checksum = rte_ipv4_cksum(iphdr);
-      // update mac dst & src
-      struct ether_addr mac;
-      struct arp_table_entry *entry;
-      entry = lookup_arp_table_entry(arp_tb, &iphdr->dst_addr);
-      if (entry == NULL || (is_expired(entry))) {
-        int dst_port = is_own_subnet(intfs, dst);
-        if(dst_port < 0) {
-          rte_pktmbuf_free(buf);
-          return ;
-        } 
-        buf->port = dst_port;          
-        arp_send_request(buf, iphdr->dst_addr, dst_port);
-        return;
-      }
-    
-      rte_eth_macaddr_get(dst_port, &mac);
-      struct ether_hdr *eth = rte_pktmbuf_mtod(buf, struct ether_hdr *);
-      ether_addr_copy(&entry->eth_addr, &eth->d_addr);
-      ether_addr_copy(&mac, &eth->s_addr);
-      eth_enqueue_tx_pkt(buf);
+      rewrite_mac_addr(buf, dst_port);
+      eth_enqueue_tx_packet(buf, dst_port);
       continue;
     }
 

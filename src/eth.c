@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <assert.h>
 #include <errno.h>
 
 #include <rte_config.h>
@@ -28,6 +29,28 @@
 
 RTE_DEFINE_PER_LCORE(struct mbuf_queues *, eth_tx_queue);
 RTE_DEFINE_PER_LCORE(uint16_t, nic_queue_id);
+
+void
+rewrite_mac_addr(struct rte_mbuf *buf, uint8_t dst_port)
+{
+  if(dst_port < 0) 
+    rte_pktmbuf_free(buf);
+
+  struct ether_addr mac;
+  rte_eth_macaddr_get(dst_port, &mac);
+
+  struct ipv4_hdr *iphdr;
+  struct arp_table_entry *entry;
+  struct ether_hdr *eth = rte_pktmbuf_mtod(buf, struct ether_hdr *);
+  iphdr = (struct ipv4_hdr*) (rte_pktmbuf_mtod(buf, char *) + buf->l2_len);
+  entry = lookup_arp_table_entry(arp_tb, &iphdr->dst_addr);
+  if (entry == NULL || (is_expired(entry))) {
+    arp_send_request(buf, iphdr->dst_addr, dst_port);
+    return;
+  }
+  ether_addr_copy(&entry->eth_addr, &eth->d_addr);
+  ether_addr_copy(&mac, &eth->s_addr);   
+}
 
 void
 eth_queue_xmit(uint8_t dst_port, uint16_t n)
@@ -62,9 +85,35 @@ __eth_enqueue_tx_pkt(struct rte_mbuf *buf, uint8_t dst_port)
   return ;
 }
 
+/* this function is called only when routing packets from external ports. */
+void
+eth_random_enqueue_tx_pkt(struct rte_mbuf *buf, uint8_t dst_port) {
+  struct ether_hdr *eth = rte_pktmbuf_mtod(buf, struct ether_hdr *);
+  if (dst_port == _mid) {
+    RTE_LOG(CRIT, ETH,
+            "Don't call this function to the packet to the external port\n");
+    assert(false);
+  }
+
+  dst_port = forwarding_node_id(buf->hash.rss);
+  ether_addr_copy(&eth->d_addr, &eth->s_addr);
+  eth->d_addr.addr_bytes[0] = (uint8_t)(0xf + (dst_port << 4));
+  __eth_enqueue_tx_pkt(buf, dst_port);
+}
+
+void
+eth_enqueue_tx_packet(struct rte_mbuf *buf, uint8_t dst_port)
+{
+  if (dst_port == _mid)
+    __eth_enqueue_tx_pkt(buf, dst_port);
+  else
+    eth_random_enqueue_tx_pkt(buf, dst_port);
+}
+
 void
 eth_enqueue_tx_pkt(struct rte_mbuf *buf, uint8_t dst_port)
 {
+  RTE_LOG(CRIT, ETH, "this function is deprecated\n.");
   struct ether_hdr *eth = rte_pktmbuf_mtod(buf, struct ether_hdr *);
 
   switch (ntohs(eth->ether_type)) {
@@ -231,29 +280,27 @@ eth_internal_input(struct rte_mbuf** bufs, uint16_t n_rx, uint8_t src_port)
         continue;
       }
     }
-
-    RTE_LOG(DEBUG, ETH, "%s (%u) %u = %u -> %u\n", __func__, __LINE__, src_port, buf->port, dst_port);
-    if (get_nic_queue_id() == _mid){ // internal -> external port
-      /*
+    /*
       {
-        uint8_t* a = (eth->s_addr).addr_bytes;
-        RTE_LOG(DEBUG, ETH, 
-                "%s MAC src %02x:%02x:%02x:%02x:%02x:%02x\n",
-                __func__, a[0], a[1], a[2], a[3], a[4], a[5]);
-        
-        a = (eth->d_addr).addr_bytes;
-        RTE_LOG(DEBUG, ETH, 
-                "%s MAC dst %02x:%02x:%02x:%02x:%02x:%02x\n",
-                __func__, a[0], a[1], a[2], a[3], a[4], a[5]);
-        
+      uint8_t* a = (eth->s_addr).addr_bytes;
+      RTE_LOG(DEBUG, ETH, 
+      "%s MAC src %02x:%02x:%02x:%02x:%02x:%02x\n",
+      __func__, a[0], a[1], a[2], a[3], a[4], a[5]);
+      
+      a = (eth->d_addr).addr_bytes;
+      RTE_LOG(DEBUG, ETH, 
+      "%s MAC dst %02x:%02x:%02x:%02x:%02x:%02x\n",
+      __func__, a[0], a[1], a[2], a[3], a[4], a[5]);
+      
       }
-      //*/
-      eth_enqueue_tx_pkt(buf, dst_port);
-      continue;
-    } else {
+    //*/
 
-    // internal -> internal
-    __eth_enqueue_tx_pkt(buf, dst_port);
-    }
+    RTE_LOG(DEBUG, ETH, "%s (%u) %u -> %u\n", __func__, __LINE__, buf->port, dst_port);
+    if (get_nic_queue_id() == _mid) // internal -> external port
+      RTE_LOG(DEBUG, ETH, "to external port\n");
+    else  // internal -> internal
+      RTE_LOG(DEBUG, ETH, "to node #%u\n", dst_port);
+
+    eth_enqueue_tx_packet(buf, dst_port);
   }
 }

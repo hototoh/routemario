@@ -104,7 +104,6 @@ ip_enqueue_pkt(struct mbuf_queue* rqueue, struct rte_mbuf* buf)
     return;
   }
 
-  RTE_LOG(DEBUG, IPV4, "own subnet\n");
   iphdr->hdr_checksum = 0;
   iphdr->hdr_checksum = rte_ipv4_cksum(iphdr);
   rewrite_mac_addr(buf, dst_port);

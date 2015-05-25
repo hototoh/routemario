@@ -99,7 +99,12 @@ parse_route(char *buffer)
   uint32_t next_hop = IPv4(next_hops[0], next_hops[1],
                            next_hops[2], next_hops[3]);
   uint8_t index = get_next_nhop_index();
-  rte_lpm_add(rib, ip_addr, mask_len, index);
+  int res = rte_lpm_add(rib, ip_addr, mask_len, index);
+  if (res < 0) {
+     RTE_LOG(DEBUG, CONFIG, "%s config error res=%d\n", __func__, res);
+     sleep(0.5);
+  }
+
   next_hop_tb[index] = next_hop;
   
   RTE_LOG(INFO, CONFIG, 

@@ -1,6 +1,6 @@
 /**
-0;95;c* Hiroshi Tokaku <tkk@hongo.wide.ad.jp>
-**/
+ * Hiroshi Tokaku <tkk@hongo.wide.ad.jp>
+ **/
 
 #include <stdio.h>
 #include <stdint.h>
@@ -46,6 +46,7 @@
 /**
  * Global variables
  */
+uint8_t _mid;
 
 /**
  * Configurable number of RX/TX ring descriptors
@@ -88,18 +89,6 @@ static const struct rte_eth_conf port_conf = {
 	},
 };
 
-// #define PORT_STATS
-#ifdef PORT_STATS
-struct rmario_port_statistics {
-	uint64_t tx;
-	uint64_t rx;
-	uint64_t dropped;
-} __rte_cache_aligned;
-
-/* list of per-port statistics */
-struct rmario_port_statistics port_statistics[RTE_MAX_ETHPORTS];
-#endif
-
 /* ethernet addresses of ports */
 static struct ether_addr rmario_ports_eth_addr[RTE_MAX_ETHPORTS];
 struct rte_mempool *rmario_pktmbuf_pool = NULL;
@@ -109,51 +98,6 @@ static unsigned int rmario_rx_queue_per_lcore = RTE_MAX_ETHPORTS;
 #define MAX_TIMER_PERIOD 86400 /* 1 day max */
 /* default period is 10 seconds */
 static int64_t timer_period = 5 * TIMER_MILLISECOND * 1000;
-
-/* Print out statistics on packets dropped */
-#ifdef PORT_STATS
-static void
-print_stats()
-{
-	uint64_t total_packets_dropped, total_packets_tx, total_packets_rx;
-
-	total_packets_dropped = 0;
-	total_packets_tx = 0;
-	total_packets_rx = 0;
-
-	//const char clr[] = { 27, '[', '2', 'J', '\0' };
-	//const char topLeft[] = { 27, '[', '1', ';', '1', 'H','\0' };
-
-		/* Clear screen and move to top left */
-	//printf("%s%s", clr, topLeft);
-
-	printf("\nPort statistics ====================================");
-
-  uint8_t n = env->n_port;
-	for (uint8_t port_id = 0; port_id < n; port_id++) {
-		printf("\nStatistics for port %u ------------------------------"
-			   "\nPackets sent: %24"PRIu64
-			   "\nPackets received: %20"PRIu64
-			   "\nPackets dropped: %21"PRIu64,
-			   port_id,
-			   port_statistics[port_id].tx,
-			   port_statistics[port_id].rx,
-			   port_statistics[port_id].dropped);
-
-		total_packets_dropped += port_statistics[port_id].dropped;
-		total_packets_tx += port_statistics[port_id].tx;
-		total_packets_rx += port_statistics[port_id].rx;
-	}
-	printf("\nAggregate statistics ==============================="
-		   "\nTotal packets sent: %18"PRIu64
-		   "\nTotal packets received: %14"PRIu64
-		   "\nTotal packets dropped: %15"PRIu64,
-		   total_packets_tx,
-		   total_packets_rx,
-		   total_packets_dropped);
-	printf("\n====================================================\n");
-}
-#endif
 
 static void
 rmario_main_process(void)
@@ -179,19 +123,6 @@ rmario_main_process(void)
         eth_queue_xmit(port_id, len);
         (get_eth_tx_Q(port_id))->len = 0;
       }
-
-#ifdef PORT_STATS			
-			if (timer_period > 0) { /* if timer is enabled */
-				timer_tsc += diff_tsc; /* advance the timer */
-        // if timer has reached its timeout
-				if (unlikely(timer_tsc >= (uint64_t) timer_period)) { 
-					if (lcore_id == rte_get_master_lcore()) { /* do this only on master core */
-						print_stats(env);
-						timer_tsc = 0; // reset the timer 
-					}
-				}
-			}
-#endif
       prev_tsc = cur_tsc;
     }
 
@@ -199,15 +130,12 @@ rmario_main_process(void)
     for (uint8_t port_id = 0; port_id < n_ports; port_id++) {
       unsigned n_rx = rte_eth_rx_burst(port_id, (uint16_t) lcore_id,
                                        pkt_burst, MAX_PKT_BURST);
-      /*
-      if (n_rx != 0)
-        RTE_LOG(INFO, MARIO, "[Port-%u(%u)] %u packet(s) came.\n",
-                port_id, lcore_id, n_rx);
-      */
-#ifdef PORT_STATS
-      __sync_fetch_and_add(&port_statistics[port_id].rx, n_rx);
-#endif
-      eth_input(pkt_burst, n_rx, port_id);
+      if (n_rx == 0) continue;
+      if (port_id == _mid) // external port
+        eth_input(pkt_burst, n_rx, port_id);
+      else { // internal port
+        eth_internal_input(pkt_burst, n_rx, port_id);        
+      }
     }
   }
   return ;
@@ -247,6 +175,14 @@ rmario_usage(const char *prgname)
 }
 
 static unsigned int
+rmario_parse_node_id(const char *q_arg)
+{
+  int node_id = atoi(q_arg);
+  RTE_LOG(INFO, MARIO, "Node ID is `%d`\n", node_id);
+  return node_id;
+}
+
+static unsigned int
 rmario_parse_nqueue(const char *q_arg)
 {
 	char *end = NULL;
@@ -267,6 +203,7 @@ rmario_parse_nqueue(const char *q_arg)
 static int
 rmario_parse_args(int argc, char **argv)
 {
+  bool arg_flag = false;
   int opt, ret;
   char **argvopt;
   int option_index;
@@ -275,9 +212,8 @@ rmario_parse_args(int argc, char **argv)
     {NULL, 0, 0, 0}
   };
 
-  argvopt = argv;
-
-  while((opt = getopt_long(argc, argvopt, "q:", lgopts, &option_index))
+  argvopt = argv;  
+  while((opt = getopt_long(argc, argvopt, "q:i:", lgopts, &option_index))
         != EOF){
     switch (opt) {
       case 'q':
@@ -287,14 +223,20 @@ rmario_parse_args(int argc, char **argv)
           return -1;
         }
         break;
+      case 'i':
+        _mid = rmario_parse_node_id(optarg);
+        arg_flag = true;
+        break;
       default:
         rmario_usage(prgname);
         return -1;
     }
   }
-         
-  if (optind >= 0)
-    argv[optind-1] = prgname;
+
+  if (!arg_flag) {
+    RTE_LOG(ERR, MARIO, "node id must be set (-i)\n");    
+    return -1;
+  }
 
   ret = optind - 1;
   optind = 0; 
@@ -365,7 +307,7 @@ main(int argc, char **argv)
   unsigned lcore_count;
   
   ret = rte_eal_init(argc, argv);
-  if (ret < 0)
+  if (ret < 0) 
     rte_exit(EXIT_FAILURE, "Invalid EAL arguments\n");
   argc -= ret;
   argv += ret;
@@ -484,6 +426,31 @@ main(int argc, char **argv)
   }
 
 	check_all_ports_link_status(n_ports);
+
+  /**
+   * L2 filter 
+   */
+  for(uint8_t mac = 0; mac < n_ports; mac++){
+    struct rte_eth_flex_filter filter;
+    filter.len = 8;
+    filter.bytes[0] = (uint8_t)(0xf) + (mac<<4);
+    for(uint8_t i = 1; i <8; i++){
+      filter.bytes[i] = 0;
+    }
+    filter.mask[0] = (uint8_t)0b10000000;
+    filter.priority = 1;
+    filter.queue = mac;
+    for(uint8_t port = 0; port < n_ports; port++){
+      if(port == _mid){
+        continue;
+      }
+      printf("mac = %d, port = %d\n", mac, port);
+      ret  = rte_eth_dev_filter_ctrl(port,
+                                     RTE_ETH_FILTER_FLEXIBLE,
+                                     RTE_ETH_FILTER_ADD,
+                                     &filter);
+    }
+  }
 
 	/* launch per-lcore init on every lcore */
   rte_eal_mp_remote_launch(rmario_launch_one_lcore, NULL, CALL_MASTER);

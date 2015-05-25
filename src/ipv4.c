@@ -44,25 +44,6 @@
 
 RTE_DEFINE_PER_LCORE(struct mbuf_queue*, routing_queue);
 
-static uint16_t
-calc_checksum(uint16_t *buf, uint32_t len)
-{
-  uint32_t sum = 0;
-
-  while (len > 1) {
-    sum += *buf;
-    buf++;
-    len -= 2;
-  }
-  if (len == 1) 
-    sum += *(uint8_t*) buf;
-
-  sum = (sum & 0xffff) + (sum >> 16);
-  sum = (sum & 0xffff) + (sum >> 16);
-
-  return (uint16_t) ~sum;
-}
-
 static int
 ip_routing(struct mbuf_queue* rqueue)
 {
@@ -71,27 +52,27 @@ ip_routing(struct mbuf_queue* rqueue)
   for (uint16_t i = 0; i < len; i++) {
     struct rte_mbuf *buf = queue[i];
     struct ipv4_hdr *iphdr;
-    iphdr = (struct ipv4_hdr*) rte_pktmbuf_mtod(buf, char*) + buf->l2_len;
-                                 
-    uint32_t dst = iphdr->dst_addr;
-    /* dst is our subnet */
+    iphdr = (struct ipv4_hdr*) (rte_pktmbuf_mtod(buf, char*) + buf->l2_len);
+    uint32_t dst = ntohl(iphdr->dst_addr);
 
+    /* dst is our subnet */
     uint8_t next_index;
-    if(rte_lpm_lookup(rib, dst, &next_index) != 0) {
-      RTE_LOG(INFO, IPV4, "not matched lpm lookup\n");
+    int res = rte_lpm_lookup(rib, dst, &next_index);
+    if(res != 0) {
+      RTE_LOG(DEBUG, IPV4, "not matched lpm lookup\n");
       rte_pktmbuf_free(buf);
       continue;
     }
     
     uint32_t next_hop = next_hop_tb[next_index];
-    uint8_t dst_port = is_own_subnet(intfs, next_hop);
+    int dst_port = is_own_subnet(intfs, next_hop);
     if(dst_port < 0) {
       rte_pktmbuf_free(buf);
       continue;
-    }
+    }    
     iphdr->hdr_checksum = 0;
     iphdr->hdr_checksum = rte_ipv4_cksum(iphdr);
-    eth_enqueue_tx_pkt(buf, dst_port);    
+    eth_enqueue_tx_pkt(buf, dst_port);
   }
   rqueue->len = 0;
   return 0;
@@ -100,9 +81,10 @@ ip_routing(struct mbuf_queue* rqueue)
 int
 ip_enqueue_routing_pkt(struct mbuf_queue* rqueue, struct rte_mbuf* buf)
 {
-  struct mbuf_queue *r_queue = get_routing_Q();
-  r_queue->queue[(r_queue->len)++] = buf;  
-  return r_queue->len == r_queue->max ? 1 : 0;
+  struct ipv4_hdr *iphdr;
+  iphdr = (struct ipv4_hdr*) (rte_pktmbuf_mtod(buf, char *) + buf->l2_len);
+  rqueue->queue[(rqueue->len)++] = buf;  
+  return rqueue->len == rqueue->max ? 1 : 0;
 }
 
 void
@@ -113,11 +95,13 @@ ip_enqueue_pkt(struct mbuf_queue* rqueue, struct rte_mbuf* buf)
 
   int dst_port = is_own_subnet(intfs, ntohl(iphdr->dst_addr));
   if(dst_port < 0) {
+    RTE_LOG(DEBUG, IPV4, "not own subnet\n");
     int res = ip_enqueue_routing_pkt(rqueue, buf);
     if(res) ip_routing(rqueue);
     return;
   }
 
+  RTE_LOG(DEBUG, IPV4, "own subnet\n");
   iphdr->hdr_checksum = 0;
   iphdr->hdr_checksum = rte_ipv4_cksum(iphdr);
   eth_enqueue_tx_pkt(buf, dst_port);
@@ -130,7 +114,6 @@ ip_rcv(struct rte_mbuf **bufs, uint16_t n_rx)
   RTE_LOG(INFO, IPV4, "%s %u packet(s)\n", __func__, n_rx);
   struct mbuf_queue *rq = get_routing_Q();
   for (uint16_t i = 0; i < n_rx; i++) {
-    int res = 0;
     struct ipv4_hdr *iphdr;
     uint32_t ndst;
     struct rte_mbuf *buf = bufs[i];
@@ -138,7 +121,6 @@ ip_rcv(struct rte_mbuf **bufs, uint16_t n_rx)
     buf->l3_len = (iphdr->version_ihl & IPV4_HDR_IHL_MASK) << 2;    
     
     /* packets to this host. */
-    /*
     {
       uint32_t d = ntohl(iphdr->dst_addr);
       uint32_t s = ntohl(iphdr->src_addr);
@@ -146,8 +128,22 @@ ip_rcv(struct rte_mbuf **bufs, uint16_t n_rx)
               (s >> 24)&0xff,(s >> 16)&0xff,(s >> 8)&0xff,s&0xff,
               (d >> 24)&0xff,(d>> 16)&0xff,(d >> 8)&0xff,d&0xff);
     }
-    */
+    
+    /* ignore braodcast */
     ndst = ntohl(iphdr->dst_addr);
+    if (IPV4_BROADCAST <= ndst) {
+      RTE_LOG(DEBUG, IPV4, "ignore broadcast.");
+      rte_pktmbuf_free(buf);
+      continue;
+    }
+    
+    /* checksum check */
+    uint16_t res = ~rte_ipv4_cksum(iphdr);
+    if (res) {
+      rte_pktmbuf_free(buf);
+      continue;
+    }
+
     int port_id = is_own_ip_addr(intfs, ndst);
     if(port_id >= 0) {      
       switch(iphdr->next_proto_id) {
@@ -157,6 +153,7 @@ ip_rcv(struct rte_mbuf **bufs, uint16_t n_rx)
         }
         case IPPROTO_TCP: 
         case IPPROTO_UDP: 
+          RTE_LOG(DEBUG, IPV4, " %s %u ip_routing\n", __func__, __LINE__);
           ;
       }
       rte_pktmbuf_free(buf);
@@ -179,8 +176,8 @@ ip_rcv(struct rte_mbuf **bufs, uint16_t n_rx)
       continue;
     }
 
-    res = ip_enqueue_routing_pkt(rq, buf);
-    if (unlikely(res)) {
+    if (unlikely(ip_enqueue_routing_pkt(rq, buf))) {
+      RTE_LOG(DEBUG, IPV4, " %s %u ip_routing\n", __func__, __LINE__);
       ip_routing(rq);
     }
   }  

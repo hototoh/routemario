@@ -59,4 +59,6 @@ arp_send_request(struct rte_mbuf* buf, uint32_t dst, uint8_t port_id);
 void
 arp_rcv(struct rte_mbuf* buf);
 
+void
+arp_internal_rcv(struct rte_mbuf* buf);
 #endif

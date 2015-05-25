@@ -21,6 +21,7 @@
 #include "mbuf_queue.h"
 #include "fdb.h"
 #include "ipv4.h"
+#include "vlb.h"
 #include "global_mario.h"
 
 #define RTE_LOGTYPE_ETH RTE_LOGTYPE_USER1
@@ -31,8 +32,8 @@ RTE_DEFINE_PER_LCORE(uint16_t, nic_queue_id);
 void
 eth_queue_xmit(uint8_t dst_port, uint16_t n)
 {
-  struct rte_mbuf **queue = (get_eth_tx_Q(dst_port))->queue;
   uint16_t ret;  
+  struct rte_mbuf **queue = (get_eth_tx_Q(dst_port))->queue;
   ret = rte_eth_tx_burst(dst_port, get_nic_queue_id(), queue, n);
   if (unlikely(ret < n)) {
     RTE_LOG(WARNING, ETH, "fail to %d packets xmit.\n", (n - ret));
@@ -45,7 +46,7 @@ eth_queue_xmit(uint8_t dst_port, uint16_t n)
   return ;
 }
 
-static void
+void
 __eth_enqueue_tx_pkt(struct rte_mbuf *buf, uint8_t dst_port)
 {
   struct mbuf_queue* tx_queue = get_eth_tx_Q(dst_port);  
@@ -53,7 +54,6 @@ __eth_enqueue_tx_pkt(struct rte_mbuf *buf, uint8_t dst_port)
   tx_queue->queue[len++] = buf;
   
   if (unlikely(len == tx_queue->max)) {
-    RTE_LOG(DEBUG, ETH, "Port-%u queue is full\n", dst_port);
     eth_queue_xmit(dst_port, len);
     len = 0;
   }
@@ -75,19 +75,64 @@ eth_enqueue_tx_pkt(struct rte_mbuf *buf, uint8_t dst_port)
       struct ipv4_hdr *iphdr;
       struct arp_table_entry *entry;
       iphdr = (struct ipv4_hdr*) (rte_pktmbuf_mtod(buf, char*) + buf->l2_len);
-      entry = lookup_arp_table_entry(arp_tb, &iphdr->dst_addr);
+
+      // is in L2 braodcast domain
+      uint32_t dst = ntohl(iphdr->dst_addr);
+      int dst_port = is_own_subnet(intfs, dst);
+      if (dst_port >= 0) {
+        entry = lookup_arp_table_entry(arp_tb, &iphdr->dst_addr);
+        if (entry == NULL || (is_expired(entry))) {
+          int dst_port = is_own_subnet(intfs, dst);
+          if(dst_port < 0) {
+            rte_pktmbuf_free(buf);
+            return ;
+          } 
+          buf->port = dst_port;
+          
+          arp_send_request(buf, iphdr->dst_addr, dst_port);
+          return;
+        }
+        ether_addr_copy(&entry->eth_addr, &eth->d_addr);
+        break;
+      }
+
+      uint8_t next_index;
+      int res = rte_lpm_lookup(rib, ntohl(iphdr->dst_addr), &next_index);
+      if (res != 0 ) {
+        rte_pktmbuf_free(buf);
+        return ;
+      }
+
+      uint32_t next_hop = htonl(next_hop_tb[next_index]);
+      entry = lookup_arp_table_entry(arp_tb, &next_hop);
       if (entry == NULL || (is_expired(entry))) {
-        RTE_LOG(INFO, ETH, "does not exit arp entry\n");
-        arp_send_request(buf, iphdr->dst_addr, dst_port);
+        int dst_port = is_own_subnet(intfs, ntohl(next_hop));
+        RTE_LOG(INFO, ETH, "does not exist arp entry\n");
+        if(dst_port < 0) {
+          rte_pktmbuf_free(buf);
+          return ;
+        }  
+        buf->port = dst_port;
+
+        arp_send_request(buf, next_hop, dst_port);
         return;
       }
       ether_addr_copy(&entry->eth_addr, &eth->d_addr);
-      buf->pkt_len = ntohs(iphdr->total_length);
+      //buf->pkt_len = ntohs(iphdr->total_length);
       break;
     }
   }
 
-  buf->pkt_len += ETHER_HDR_LEN;
+  //buf->pkt_len += ETHER_HDR_LEN;
+  if (dst_port != _mid) { // -> internal
+    ether_addr_copy(&eth->d_addr, &eth->s_addr);
+    eth->d_addr.addr_bytes[0] = (uint8_t)(0xf + (dst_port << 4));
+    if (buf->port == _mid) { // external -> internal
+      dst_port = forwarding_node_id(buf->hash.rss);
+      RTE_LOG(DEBUG, ETH, "RSS(?): %u, PORT: %u\n", buf->hash.rss, dst_port);
+    }
+  }
+
   __eth_enqueue_tx_pkt(buf, dst_port);
 }
 
@@ -141,31 +186,77 @@ eth_input(struct rte_mbuf** bufs, uint16_t n_rx, uint8_t src_port)
   struct ether_addr mac;
   rte_eth_macaddr_get(src_port, &mac);
   for(uint32_t i = 0; i < n_rx; i++) {
-    struct rte_mbuf* pkt = bufs[i];
-    rte_prefetch0(rte_pktmbuf_mtod(pkt, void *));
+    struct rte_mbuf* buf = bufs[i];
+    rte_prefetch0(rte_pktmbuf_mtod(buf, void *));
     
-    struct ether_hdr *eth = rte_pktmbuf_mtod(pkt, struct ether_hdr *);
+    struct ether_hdr *eth = rte_pktmbuf_mtod(buf, struct ether_hdr *);
     //RTE_LOG(INFO, ETH, "[Port %u] length of type: %x\n",
-    // pkt->port, ntohs(eth->ether_type));
-    pkt->l2_len = ETHER_HDR_LEN;    
+    // buf->port, ntohs(eth->ether_type));
+    buf->l2_len = ETHER_HDR_LEN;    
     if((!is_same_ether_addr(&eth->d_addr, &mac)) &&
        (!is_broadcast_ether_addr(&eth->d_addr))) {
-      rte_pktmbuf_free(pkt);
+      rte_pktmbuf_free(buf);
       continue;
     }
     switch (ntohs(eth->ether_type)) {
       case ETHER_TYPE_ARP: {
-        arp_rcv(pkt);
+        arp_rcv(buf);
         continue;
       }
       case ETHER_TYPE_IPv4: {
-        ip_rcv(&pkt, 1);
+        // XXX
+        ip_rcv(&buf, 1);
         continue;
       }
       case ETHER_TYPE_IPv6: {
         ;
       }
     }
-    rte_pktmbuf_free(pkt);
+    rte_pktmbuf_free(buf);
+  }
+}
+
+void
+eth_internal_input(struct rte_mbuf** bufs, uint16_t n_rx, uint8_t src_port)
+{
+  struct ether_addr mac;
+  uint8_t dst_port = get_nic_queue_id();
+  rte_eth_macaddr_get(dst_port, &mac);
+  for(uint32_t i = 0; i < n_rx; i++) {
+    struct rte_mbuf* buf = bufs[i];
+    rte_prefetch0(rte_pktmbuf_mtod(buf, void *));
+
+    struct ether_hdr *eth = rte_pktmbuf_mtod(buf, struct ether_hdr *);
+    buf->l2_len = ETHER_HDR_LEN;
+    switch (ntohs(eth->ether_type)) {
+      case ETHER_TYPE_ARP: {
+        arp_internal_rcv(buf);
+        continue;
+      }
+    }
+
+    RTE_LOG(DEBUG, ETH, "%s (%u) %u = %u -> %u\n", __func__, __LINE__, src_port, buf->port, dst_port);
+    if (get_nic_queue_id() == _mid){ // internal -> external port
+      /*
+      {
+        uint8_t* a = (eth->s_addr).addr_bytes;
+        RTE_LOG(DEBUG, ETH, 
+                "%s MAC src %02x:%02x:%02x:%02x:%02x:%02x\n",
+                __func__, a[0], a[1], a[2], a[3], a[4], a[5]);
+        
+        a = (eth->d_addr).addr_bytes;
+        RTE_LOG(DEBUG, ETH, 
+                "%s MAC dst %02x:%02x:%02x:%02x:%02x:%02x\n",
+                __func__, a[0], a[1], a[2], a[3], a[4], a[5]);
+        
+      }
+      //*/
+      eth_enqueue_tx_pkt(buf, dst_port);
+      continue;
+    } else {
+
+    // internal -> internal
+    __eth_enqueue_tx_pkt(buf, dst_port);
+    }
   }
 }

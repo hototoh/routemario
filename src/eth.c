@@ -66,9 +66,6 @@ void
 eth_enqueue_tx_pkt(struct rte_mbuf *buf, uint8_t dst_port)
 {
   struct ether_hdr *eth = rte_pktmbuf_mtod(buf, struct ether_hdr *);
-  //struct ether_addr mac;
-  //rte_eth_macaddr_get(dst_port, &mac);
-  //ether_addr_copy(&mac, &eth->s_addr);
 
   switch (ntohs(eth->ether_type)) {
     case ETHER_TYPE_IPv4: {

@@ -296,11 +296,13 @@ eth_internal_input(struct rte_mbuf** bufs, uint16_t n_rx, uint8_t src_port)
     //*/
 
     RTE_LOG(DEBUG, ETH, "%s (%u) %u -> %u\n", __func__, __LINE__, buf->port, dst_port);
-    if (get_nic_queue_id() == _mid) // internal -> external port
+    if (get_nic_queue_id() == _mid) { // internal -> external port
       RTE_LOG(DEBUG, ETH, "to external port\n");
-    else  // internal -> internal
+      ether_addr_copy(&eth->s_addr, &eth->d_addr);
+      ether_addr_copy(&mac, &eth->s_addr);
+    } else  // internal -> internal
       RTE_LOG(DEBUG, ETH, "to node #%u\n", dst_port);
 
-    eth_enqueue_tx_packet(buf, dst_port);
+    __eth_enqueue_tx_pkt(buf, dst_port);
   }
 }

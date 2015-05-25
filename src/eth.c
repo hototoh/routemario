@@ -235,7 +235,7 @@ eth_internal_input(struct rte_mbuf** bufs, uint16_t n_rx, uint8_t src_port)
       }
     }
 
-    RTE_LOG(DEBUG, ETH, "%s (%u) %u -> %u\n", __func__, __LINE__,  buf->port, dst_port);
+    RTE_LOG(DEBUG, ETH, "%s (%u) %u = %u -> %u\n", __func__, __LINE__, src_port, buf->port, dst_port);
     if (get_nic_queue_id() == _mid){ // internal -> external port
       /*
       {

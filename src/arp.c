@@ -214,7 +214,7 @@ arp_send_request(struct rte_mbuf* buf, uint32_t tip, uint8_t port_id)
   ether_addr_copy(&l3_if->mac, &eth->s_addr);
   eth->ether_type = htons(ETHER_TYPE_ARP);
   //buf->pkt_len = 46;  
-  __eth_enqueue_tx_pkt(buf, port_id);
+  eth_enqueue_tx_packet(buf, port_id);
   return;
 free:
   rte_pktmbuf_free(buf);
@@ -351,8 +351,8 @@ arp_internal_request_process(struct rte_mbuf* buf, struct arp_hdr* arphdr)
   {
     struct arp_ipv4 *body = &arphdr->arp_data;
     uint32_t s = ntohl(body->arp_tip);
-    RTE_LOG(DEBUG, ARP, "[%u] %s [%u] %s Request %u.%u.%u.%u\n => %u\n",
-            rte_lcore_id(), __FILE__, __LINE__, __func__,
+    RTE_LOG(DEBUG, ARP, "[%u][Port-%u] %s [%u] %s Request %u.%u.%u.%u => %u\n",
+            rte_lcore_id(), buf->port, __FILE__, __LINE__, __func__,
             (s >> 24)&0xff,(s >> 16)&0xff,(s >> 8)&0xff,s&0xff,
             dst_port
             );

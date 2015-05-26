@@ -316,7 +316,7 @@ eth_internal_input(struct rte_mbuf** bufs, uint16_t n_rx, uint8_t src_port)
                   (s >> 24)&0xff,(s >> 16)&0xff,(s >> 8)&0xff,s&0xff,
                   (d >> 24)&0xff,(d>> 16)&0xff,(d >> 8)&0xff,d&0xff);
         }
-        if (get_nic_queue_id() == _mid) { // internal -> external port
+        if (dst_port == _mid) { // internal -> external port
           RTE_LOG(DEBUG, ETH, "to external port\n");
           ether_addr_copy(&eth->s_addr, &eth->d_addr);
           ether_addr_copy(&mac, &eth->s_addr);

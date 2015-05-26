@@ -209,7 +209,7 @@ arp_send_request(struct rte_mbuf* buf, uint32_t tip, uint8_t port_id)
   if (buf == NULL) {
     buf = rte_pktmbuf_alloc(rmario_pktmbuf_pool);
   }
-
+  fprintf(stderr, "sending arp request\n.");
   struct arp_hdr* arphdr;
   struct ether_hdr* eth = rte_pktmbuf_mtod(buf, struct ether_hdr*);
   arphdr = (struct arp_hdr *)(rte_pktmbuf_mtod(buf, char*) + buf->l2_len);

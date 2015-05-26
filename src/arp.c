@@ -299,7 +299,7 @@ arp_reply_process(struct rte_mbuf* buf, struct arp_hdr* arphdr, bool internal)
   // broadcast to all the other nodes
   uint8_t port_num = rte_eth_dev_count();
   for (uint8_t port_id = 0, i = 0; port_id < port_num; port_id++) {
-    RTE_LOG(DEBUG, ARP, "%s\n", __func__);
+    RTE_LOG(DEBUG, ARP, "broadcast arp entry%s\n", __func__);
     if (port_id == buf->port) continue;
     
     struct rte_mbuf* _buf = buf;
@@ -348,6 +348,7 @@ arp_internal_request_process(struct rte_mbuf* buf, struct arp_hdr* arphdr)
     memset(&eth->d_addr  , 0xff, ETHER_ADDR_LEN);
     ether_addr_copy(&mac, &eth->s_addr);
   }
+
   {
     struct arp_ipv4 *body = &arphdr->arp_data;
     uint32_t s = ntohl(body->arp_tip);
@@ -358,6 +359,7 @@ arp_internal_request_process(struct rte_mbuf* buf, struct arp_hdr* arphdr)
             );
   }
   __eth_enqueue_tx_pkt(buf, dst_port); 
+
 }
 
 void

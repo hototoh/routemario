@@ -66,6 +66,7 @@ eth_queue_xmit(uint8_t dst_port, uint16_t n)
       rte_pktmbuf_free(queue[ret]);
     } while(++ret < n);
   }
+  RTE_LOG(DEBUG, ETH, "[%u] %s [%u] %s done.\n\n", rte_lcore_id(), __FILE__, __LINE__, __func__);
 
   get_eth_tx_Q(dst_port)->len = 0;
   return ;

@@ -44,7 +44,7 @@ rewrite_mac_addr(struct rte_mbuf *buf, uint8_t dst_port, uint32_t next_hop)
   struct arp_table_entry *entry;
   struct ether_hdr *eth = rte_pktmbuf_mtod(buf, struct ether_hdr *);
   iphdr = (struct ipv4_hdr*) (rte_pktmbuf_mtod(buf, char *) + buf->l2_len);
-  entry = lookup_arp_table_entry(arp_tb, next_hop);
+  entry = lookup_arp_table_entry(arp_tb, &next_hop);
   if ((entry == NULL) || (is_expired(entry))) {
     arp_send_request(buf, iphdr->dst_addr, dst_port);
     return 1;
@@ -261,78 +261,3 @@ eth_internal_input(struct rte_mbuf** bufs, uint16_t n_rx, uint8_t src_port)
     rte_pktmbuf_free(buf);
   }
 }
-
-#if 0
-void
-eth_enqueue_tx_pkt(struct rte_mbuf *buf, uint8_t dst_port)
-{
-  RTE_LOG(DEBUG, ETH, "[%u] %s [%u] %s\n", rte_lcore_id(), __FILE__, __LINE__, __func__);
-  RTE_LOG(CRIT, ETH, "this function is deprecated\n.");
-  struct ether_hdr *eth = rte_pktmbuf_mtod(buf, struct ether_hdr *);
-
-  switch (ntohs(eth->ether_type)) {
-    case ETHER_TYPE_IPv4: {
-      struct ipv4_hdr *iphdr;
-      struct arp_table_entry *entry;
-      iphdr = (struct ipv4_hdr*) (rte_pktmbuf_mtod(buf, char*) + buf->l2_len);
-
-      // is in L2 braodcast domain
-      uint32_t dst = ntohl(iphdr->dst_addr);
-      int dst_port = is_own_subnet(intfs, dst);
-      if (dst_port >= 0) {
-        entry = lookup_arp_table_entry(arp_tb, &iphdr->dst_addr);
-        if (entry == NULL || (is_expired(entry))) {
-          int dst_port = is_own_subnet(intfs, dst);
-          if(dst_port < 0) {
-            rte_pktmbuf_free(buf);
-            return ;
-          } 
-          buf->port = dst_port;
-          
-          arp_send_request(buf, iphdr->dst_addr, dst_port);
-          return;
-        }
-        ether_addr_copy(&entry->eth_addr, &eth->d_addr);
-        break;
-      }
-
-      uint8_t next_index;
-      int res = rte_lpm_lookup(rib, ntohl(iphdr->dst_addr), &next_index);
-      if (res != 0 ) {
-        rte_pktmbuf_free(buf);
-        return ;
-      }
-
-      uint32_t next_hop = htonl(next_hop_tb[next_index]);
-      entry = lookup_arp_table_entry(arp_tb, &next_hop);
-      if (entry == NULL || (is_expired(entry))) {
-        int dst_port = is_own_subnet(intfs, ntohl(next_hop));
-        RTE_LOG(INFO, ETH, "does not exist arp entry\n");
-        if(dst_port < 0) {
-          rte_pktmbuf_free(buf);
-          return ;
-        }  
-        buf->port = dst_port;
-
-        arp_send_request(buf, next_hop, dst_port);
-        return;
-      }
-      ether_addr_copy(&entry->eth_addr, &eth->d_addr);
-      //buf->pkt_len = ntohs(iphdr->total_length);
-      break;
-    }
-  }
-
-  //buf->pkt_len += ETHER_HDR_LEN;
-  if (dst_port != _mid) { // -> internal
-    ether_addr_copy(&eth->d_addr, &eth->s_addr);
-    eth->d_addr.addr_bytes[0] = (uint8_t)(0xf + (dst_port << 4));
-    if (buf->port == _mid) { // external -> internal
-      dst_port = forwarding_node_id(buf->hash.rss);
-      RTE_LOG(DEBUG, ETH, "RSS(?): %u, PORT: %u\n", buf->hash.rss, dst_port);
-    }
-  }
-
-  __eth_enqueue_tx_pkt(buf, dst_port);
-}
-#endif

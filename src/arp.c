@@ -168,7 +168,7 @@ lookup_arp_table_entry(struct arp_table* table, const uint32_t *ip_addr)
   int32_t key = rte_hash_lookup(table->handler, (void*) ip_addr);
   if (key >= 0) {
     struct arp_table_entry *entry = &table->items[key];
-    RTE_LOG(DEBUG, INFO, "this must not false\n"); 
+    RTE_LOG(DEBUG, ARP, "this must not false\n"); 
     assert(entry != NULL);
     return entry;
   }

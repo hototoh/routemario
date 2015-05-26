@@ -185,7 +185,7 @@ ip_rcv(struct rte_mbuf **bufs, uint16_t n_rx)
         eth_enqueue_tx_packet(buf, dst_port);
       continue;
     }
-
+    assert(false);
     if (unlikely(ip_enqueue_routing_pkt(rq, buf))) {
       RTE_LOG(DEBUG, IPV4, "[%u] %s %u %s ip routing\n", rte_lcore_id(), __FILE__, __LINE__, __func__);
       ip_routing(rq);

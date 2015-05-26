@@ -272,9 +272,10 @@ eth_input(struct rte_mbuf** bufs, uint16_t n_rx, uint8_t src_port)
 void
 eth_internal_input(struct rte_mbuf** bufs, uint16_t n_rx, uint8_t src_port)
 {
-  RTE_LOG(DEBUG, ETH, "[%u] %s [%u] %s\n", rte_lcore_id(), __FILE__, __LINE__, __func__);
-  struct ether_addr mac;
   uint8_t dst_port = get_nic_queue_id();
+  RTE_LOG(DEBUG, ETH, " %s[%u] [Core-%u][Port-%u][Q#%u] %s\n",
+          __FILE__, __LINE__, rte_lcore_id(), src_port, dst_port, __func__);
+  struct ether_addr mac;
   rte_eth_macaddr_get(dst_port, &mac);
   for(uint32_t i = 0; i < n_rx; i++) {
     struct rte_mbuf* buf = bufs[i];
@@ -282,6 +283,21 @@ eth_internal_input(struct rte_mbuf** bufs, uint16_t n_rx, uint8_t src_port)
 
     struct ether_hdr *eth = rte_pktmbuf_mtod(buf, struct ether_hdr *);
     buf->l2_len = ETHER_HDR_LEN;
+  {
+  uint8_t* a = (eth->s_addr).addr_bytes;
+  RTE_LOG(DEBUG, ETH, 
+  "%s MAC src %02x:%02x:%02x:%02x:%02x:%02x\n",
+  __func__, a[0], a[1], a[2], a[3], a[4], a[5]);
+  
+  a = (eth->d_addr).addr_bytes;
+  RTE_LOG(DEBUG, ETH, 
+  "%s MAC dst %02x:%02x:%02x:%02x:%02x:%02x\n",
+  __func__, a[0], a[1], a[2], a[3], a[4], a[5]);
+  
+  }
+//*/
+
+
     switch (ntohs(eth->ether_type)) {
       case ETHER_TYPE_ARP: {
         arp_internal_rcv(buf);
@@ -312,19 +328,3 @@ eth_internal_input(struct rte_mbuf** bufs, uint16_t n_rx, uint8_t src_port)
     rte_pktmbuf_free(buf);
   }
 }
-
-/*
-  {
-  uint8_t* a = (eth->s_addr).addr_bytes;
-  RTE_LOG(DEBUG, ETH, 
-  "%s MAC src %02x:%02x:%02x:%02x:%02x:%02x\n",
-  __func__, a[0], a[1], a[2], a[3], a[4], a[5]);
-  
-  a = (eth->d_addr).addr_bytes;
-  RTE_LOG(DEBUG, ETH, 
-  "%s MAC dst %02x:%02x:%02x:%02x:%02x:%02x\n",
-  __func__, a[0], a[1], a[2], a[3], a[4], a[5]);
-  
-  }
-//*/
-

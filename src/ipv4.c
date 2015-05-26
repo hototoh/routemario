@@ -10,6 +10,7 @@
 #include <unistd.h>
 #include <errno.h>
 #include <netinet/in.h>
+#include <assert.h>
 #include <arpa/inet.h>
 
 #include <rte_common.h>

@@ -219,6 +219,7 @@ arp_send_request(struct rte_mbuf* buf, uint32_t tip, uint8_t port_id)
   eth_enqueue_tx_packet(buf, port_id);
   return;
 free:
+  RTE_LOG(DEBUG, ARP, "l3 interface not found\n", __func__);  
   rte_pktmbuf_free(buf);
 }
 
@@ -306,7 +307,7 @@ arp_reply_process(struct rte_mbuf* buf, struct arp_hdr* arphdr, bool internal)
     
     struct rte_mbuf* _buf = buf;
     if(++i != (port_num - 1))
-       _buf = rte_pktmbuf_clone(buf, rmario_pktmbuf_pool);
+      _buf = rte_pktmbuf_clone(buf, rmario_pktmbuf_pool);
     
     __eth_enqueue_tx_pkt(buf, port_id);
   }

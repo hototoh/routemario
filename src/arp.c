@@ -351,7 +351,7 @@ arp_internal_request_process(struct rte_mbuf* buf, struct arp_hdr* arphdr)
   {
     struct arp_ipv4 *body = &arphdr->arp_data;
     uint32_t s = ntohl(body->arp_tip);
-    RTE_LOG(DEBUG, ARP, "[%u] %s [%u] %s Request %u.%u.%u.%u\n => $u",
+    RTE_LOG(DEBUG, ARP, "[%u] %s [%u] %s Request %u.%u.%u.%u\n => %u\n",
             rte_lcore_id(), __FILE__, __LINE__, __func__,
             (s >> 24)&0xff,(s >> 16)&0xff,(s >> 8)&0xff,s&0xff,
             dst_port

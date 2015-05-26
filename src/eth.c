@@ -189,7 +189,7 @@ eth_enqueue_tx_pkt(struct rte_mbuf *buf, uint8_t dst_port)
 
   __eth_enqueue_tx_pkt(buf, dst_port);
 }
-#
+#endif
 #ifdef L2SWITCHING
 /*
 static void

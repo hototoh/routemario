@@ -48,6 +48,7 @@ RTE_DEFINE_PER_LCORE(struct mbuf_queue*, routing_queue);
 static int
 ip_routing(struct mbuf_queue* rqueue)
 {
+  RTE_LOG(DEBUG, IPV4, "[%u] %s [%u] %s\n", rte_lcore_id(), __FILE__, __LINE__, __func__);
   struct rte_mbuf **queue = rqueue->queue;
   uint16_t len = rqueue->len;
   for (uint16_t i = 0; i < len; i++) {
@@ -84,6 +85,7 @@ ip_routing(struct mbuf_queue* rqueue)
 int
 ip_enqueue_routing_pkt(struct mbuf_queue* rqueue, struct rte_mbuf* buf)
 {
+  RTE_LOG(DEBUG, IPV4, "[%u] %s [%u] %s\n", rte_lcore_id(), __FILE__, __LINE__, __func__);
   struct ipv4_hdr *iphdr;
   iphdr = (struct ipv4_hdr*) (rte_pktmbuf_mtod(buf, char *) + buf->l2_len);
   rqueue->queue[(rqueue->len)++] = buf;  
@@ -93,6 +95,7 @@ ip_enqueue_routing_pkt(struct mbuf_queue* rqueue, struct rte_mbuf* buf)
 void
 ip_enqueue_pkt(struct mbuf_queue* rqueue, struct rte_mbuf* buf)
 {
+  RTE_LOG(DEBUG, IPV4, "[%u] %s [%u] %s\n", rte_lcore_id(), __FILE__, __LINE__, __func__);
   struct ipv4_hdr *iphdr;
   iphdr = (struct ipv4_hdr*) (rte_pktmbuf_mtod(buf, char*) + buf->l2_len);
 
@@ -114,7 +117,6 @@ ip_enqueue_pkt(struct mbuf_queue* rqueue, struct rte_mbuf* buf)
 void
 ip_rcv(struct rte_mbuf **bufs, uint16_t n_rx)
 {
-  RTE_LOG(INFO, IPV4, "%s %u packet(s)\n", __func__, n_rx);
   struct mbuf_queue *rq = get_routing_Q();
   for (uint16_t i = 0; i < n_rx; i++) {
     struct ipv4_hdr *iphdr;
@@ -127,7 +129,7 @@ ip_rcv(struct rte_mbuf **bufs, uint16_t n_rx)
     {
       uint32_t d = ntohl(iphdr->dst_addr);
       uint32_t s = ntohl(iphdr->src_addr);
-      RTE_LOG(INFO, IPV4, "%u.%u.%u.%u -> %u.%u.%u.%u\n",
+      RTE_LOG(DEBUG, IPV4, "[%u] %s [%u] %s %u.%u.%u.%u -> %u.%u.%u.%u\n", rte_lcore_id(), __FILE__, __LINE__, __func__,
               (s >> 24)&0xff,(s >> 16)&0xff,(s >> 8)&0xff,s&0xff,
               (d >> 24)&0xff,(d>> 16)&0xff,(d >> 8)&0xff,d&0xff);
     }

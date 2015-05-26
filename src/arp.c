@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <assert.h>
 #include <errno.h>
 
 #include <rte_common.h>
@@ -255,31 +256,28 @@ arp_request_process(struct rte_mbuf* buf, struct arp_hdr* arphdr)
   ether_addr_copy(&body->arp_tha, &eth->d_addr);
   ether_addr_copy(&body->arp_sha, &eth->s_addr);
   //buf->pkt_len = 46;
-  /*
-  {
-    struct arp_ipv4 *body = &arphdr->arp_data;
-    uint8_t *a = (body->arp_sha).addr_bytes;
-    RTE_LOG(DEBUG, ARP, 
-            "ARP src %02x:%02x:%02x:%02x:%02x:%02x\n",
-            a[0], a[1], a[2], a[3], a[4], a[5]);
+    {
+      struct ether_hdr *eth = rte_pktmbuf_mtod(buf, struct ether_hdr *);
+      struct arp_ipv4 *body = &arphdr->arp_data;
+      uint8_t *a = (body->arp_sha).addr_bytes;
+      uint8_t *b = (body->arp_tha).addr_bytes;
+      uint8_t *c = (eth->s_addr).addr_bytes;
+      uint8_t *d = (eth->d_addr).addr_bytes;
+      uint32_t sip = ntohl(body->arp_sip);
+      uint32_t dip = ntohl(body->arp_tip);
+      RTE_LOG(DEBUG, ARP, 
+              "[%u] Port %u => %u\t%s %u \n"
+              "ARP src %02x:%02x:%02x:%02x:%02x:%02x => target %02x:%02x:%02x:%02x:%02x:%02x\n"
+              "MAC src %02x:%02x:%02x:%02x:%02x:%02x => target %02x:%02x:%02x:%02x:%02x:%02x\n"
+              "IP  %u.%u.%u.%u -> %u.%u.%u.%u\n",
+              rte_lcore_id(), buf->port, buf->port, __func__, __LINE__,
+              a[0], a[1], a[2], a[3], a[4], a[5], b[0], b[1], b[2], b[3], b[4], b[5], 
+              c[0], c[1], c[2], c[3], c[4], c[5], d[0], d[1], d[2], d[3], d[4], d[5],
+              (sip >> 24)&0xff,(sip >> 16)&0xff,(sip >> 8)&0xff, sip&0xff,
+              (dip >> 24)&0xff,(dip >> 16)&0xff,(dip >> 8)&0xff, dip&0xff);
+    }
+    // */
 
-    a = (body->arp_tha).addr_bytes;
-    RTE_LOG(DEBUG, ARP, 
-            "ARP target %02x:%02x:%02x:%02x:%02x:%02x\n",
-            a[0], a[1], a[2], a[3], a[4], a[5]);
-
-    a = (eth->s_addr).addr_bytes;
-    RTE_LOG(DEBUG, ARP, 
-            "MAC src %02x:%02x:%02x:%02x:%02x:%02x\n",
-            a[0], a[1], a[2], a[3], a[4], a[5]);
-
-    a = (eth->d_addr).addr_bytes;
-    RTE_LOG(DEBUG, ARP, 
-            "MAC dst %02x:%02x:%02x:%02x:%02x:%02x\n",
-            a[0], a[1], a[2], a[3], a[4], a[5]);
-    
-  }
-  // */
   __eth_enqueue_tx_pkt(buf, buf->port);
   return ;
 out:
@@ -289,7 +287,27 @@ out:
 static void
 arp_reply_process(struct rte_mbuf* buf, struct arp_hdr* arphdr, bool internal)                  
 {
-  RTE_LOG(DEBUG, ARP, "%s\n", __func__);
+    {
+      struct ether_hdr *eth = rte_pktmbuf_mtod(buf, struct ether_hdr *);
+      struct arp_ipv4 *body = &arphdr->arp_data;
+      uint8_t *a = (body->arp_sha).addr_bytes;
+      uint8_t *b = (body->arp_tha).addr_bytes;
+      uint8_t *c = (eth->s_addr).addr_bytes;
+      uint8_t *d = (eth->d_addr).addr_bytes;
+      uint32_t sip = ntohl(body->arp_sip);
+      uint32_t dip = ntohl(body->arp_tip);
+      RTE_LOG(DEBUG, ARP, 
+              "[%u] Port   => %u\t%s %u \n"
+              "ARP src %02x:%02x:%02x:%02x:%02x:%02x => target %02x:%02x:%02x:%02x:%02x:%02x\n"
+              "MAC src %02x:%02x:%02x:%02x:%02x:%02x => target %02x:%02x:%02x:%02x:%02x:%02x\n"
+              "IP  %u.%u.%u.%u -> %u.%u.%u.%u\n",
+              rte_lcore_id(), buf->port, __func__, __LINE__,
+              a[0], a[1], a[2], a[3], a[4], a[5], b[0], b[1], b[2], b[3], b[4], b[5], 
+              c[0], c[1], c[2], c[3], c[4], c[5], d[0], d[1], d[2], d[3], d[4], d[5],
+              (sip >> 24)&0xff,(sip >> 16)&0xff,(sip >> 8)&0xff,sip&0xff,
+              (dip >> 24)&0xff,(dip>> 16)&0xff,(dip >> 8)&0xff,dip&0xff);
+    }
+
   int res = 0;
   struct arp_ipv4 *body = &arphdr->arp_data;
 
@@ -309,6 +327,7 @@ arp_reply_process(struct rte_mbuf* buf, struct arp_hdr* arphdr, bool internal)
     if(++i != (port_num - 1))
       _buf = rte_pktmbuf_clone(buf, rmario_pktmbuf_pool);
     
+    RTE_LOG(DEBUG, ARP, "%s broadcast arp entry %u => %u\n", __func__, buf->port, port_id);
     __eth_enqueue_tx_pkt(buf, port_id);
   }
 }
@@ -340,9 +359,9 @@ arp_rcv(struct rte_mbuf* buf)
 static void
 arp_internal_request_process(struct rte_mbuf* buf, struct arp_hdr* arphdr)
 {
-  RTE_LOG(DEBUG, ARP, "%s\n", __func__);
   uint8_t dst_port = get_nic_queue_id();
   if(dst_port == _mid) {
+    RTE_LOG(DEBUG, ARP, "[%u]%s to external\n", rte_lcore_id(), __func__);
     struct ether_addr mac;
     rte_eth_macaddr_get(dst_port, &mac);
 
@@ -352,44 +371,33 @@ arp_internal_request_process(struct rte_mbuf* buf, struct arp_hdr* arphdr)
     memset(&eth->d_addr  , 0xff, ETHER_ADDR_LEN);
     memset(&body->arp_tha  , 0xff, ETHER_ADDR_LEN);
     ether_addr_copy(&mac, &eth->s_addr);
+  } else {
+    RTE_LOG(DEBUG, ARP, "[%u]%s to forward\n", rte_lcore_id(), __func__);
   }
 
-  {
-    struct arp_ipv4 *body = &arphdr->arp_data;
-    uint32_t s = ntohl(body->arp_tip);
-    RTE_LOG(DEBUG, ARP, "[%u][Port-%u] %s [%u] %s Request %u.%u.%u.%u => %u\n",
-            rte_lcore_id(), buf->port, __FILE__, __LINE__, __func__,
-            (s >> 24)&0xff,(s >> 16)&0xff,(s >> 8)&0xff,s&0xff,
-            dst_port
-            );
+
   
-  {
-    struct ether_hdr *eth = rte_pktmbuf_mtod(buf, struct ether_hdr *);
-    struct arp_ipv4 *body = &arphdr->arp_data;
-    uint8_t *a = (body->arp_sha).addr_bytes;
-    RTE_LOG(DEBUG, ARP, "%s\n", __func__);
-    RTE_LOG(DEBUG, ARP, 
-            "ARP src %02x:%02x:%02x:%02x:%02x:%02x\n",
-            a[0], a[1], a[2], a[3], a[4], a[5]);
-
-    a = (body->arp_tha).addr_bytes;
-    RTE_LOG(DEBUG, ARP, 
-            "ARP target %02x:%02x:%02x:%02x:%02x:%02x\n",
-            a[0], a[1], a[2], a[3], a[4], a[5]);
-
-    a = (eth->s_addr).addr_bytes;
-    RTE_LOG(DEBUG, ARP, 
-            "MAC src %02x:%02x:%02x:%02x:%02x:%02x\n",
-            a[0], a[1], a[2], a[3], a[4], a[5]);
-
-    a = (eth->d_addr).addr_bytes;
-    RTE_LOG(DEBUG, ARP, 
-            "MAC dst %02x:%02x:%02x:%02x:%02x:%02x\n",
-            a[0], a[1], a[2], a[3], a[4], a[5]);
-    
-  }
-  // */
-  }
+    {
+      struct ether_hdr *eth = rte_pktmbuf_mtod(buf, struct ether_hdr *);
+      struct arp_ipv4 *body = &arphdr->arp_data;
+      uint8_t *a = (body->arp_sha).addr_bytes;
+      uint8_t *b = (body->arp_tha).addr_bytes;
+      uint8_t *c = (eth->s_addr).addr_bytes;
+      uint8_t *d = (eth->d_addr).addr_bytes;
+      uint32_t sip = ntohl(body->arp_sip);
+      uint32_t dip = ntohl(body->arp_tip);
+      RTE_LOG(DEBUG, ARP, 
+              "[%u] Port %u => %u\t%s %u \n"
+              "ARP src %02x:%02x:%02x:%02x:%02x:%02x => target %02x:%02x:%02x:%02x:%02x:%02x\n"
+              "MAC src %02x:%02x:%02x:%02x:%02x:%02x => target %02x:%02x:%02x:%02x:%02x:%02x\n"
+              "IP  %u.%u.%u.%u -> %u.%u.%u.%u\n",
+              rte_lcore_id(), buf->port, dst_port, __func__, __LINE__,
+              a[0], a[1], a[2], a[3], a[4], a[5], b[0], b[1], b[2], b[3], b[4], b[5], 
+              c[0], c[1], c[2], c[3], c[4], c[5], d[0], d[1], d[2], d[3], d[4], d[5],
+              (sip >> 24)&0xff,(sip >> 16)&0xff,(sip >> 8)&0xff,sip&0xff,
+              (dip >> 24)&0xff,(dip>> 16)&0xff,(dip >> 8)&0xff,dip&0xff);
+    }
+    // */
   __eth_enqueue_tx_pkt(buf, dst_port); 
 }
 
@@ -402,7 +410,11 @@ arp_internal_rcv(struct rte_mbuf* buf)
   if (ntohs(arphdr->arp_hrd) != ARP_HRD_ETHER ||
       ntohs(arphdr->arp_pro) != ETHER_TYPE_IPv4 ||
       arphdr->arp_hln        != ETHER_ADDR_LEN ||
-      arphdr->arp_pln        != sizeof(uint32_t) ) return ;
+      arphdr->arp_pln        != sizeof(uint32_t) ) {
+    RTE_LOG(ERR, ARP, "%s drop arp packet.\n");
+    assert(false);
+    return ;
+  }
     
       
   switch(ntohs(arphdr->arp_op)) {

@@ -181,6 +181,7 @@ lookup_bulk_arp_table_entries(struct arp_table *table,
 void
 arp_send_request(struct rte_mbuf* buf, uint32_t tip, uint8_t port_id)
 {
+  RTE_LOG(DEBUG, ARP, "%s\n", __func__);
   if (buf == NULL) {
     buf = rte_pktmbuf_alloc(rmario_pktmbuf_pool);
   }
@@ -213,6 +214,7 @@ free:
 static void
 arp_request_process(struct rte_mbuf* buf, struct arp_hdr* arphdr)
 {
+  RTE_LOG(DEBUG, ARP, "%s\n", __func__);
   struct ether_hdr*eth;
   struct arp_ipv4 *body = &arphdr->arp_data;
   int port_id = is_own_ip_addr(intfs , ntohl(body->arp_tip));
@@ -288,6 +290,7 @@ arp_reply_process(struct rte_mbuf* buf, struct arp_hdr* arphdr, bool internal)
   // broadcast to all the other nodes
   uint8_t port_num = rte_eth_dev_count();
   for (uint8_t port_id = 0, i = 0; port_id < port_num; port_id++) {
+    RTE_LOG(DEBUG, ARP, "%s\n", __func__);
     if (port_id == buf->port) continue;
     
     struct rte_mbuf* _buf = buf;
@@ -301,6 +304,7 @@ arp_reply_process(struct rte_mbuf* buf, struct arp_hdr* arphdr, bool internal)
 void
 arp_rcv(struct rte_mbuf* buf)
 {
+  RTE_LOG(DEBUG, ARP, "%s\n", __func__);
   struct arp_hdr* arphdr;
   arphdr = (struct arp_hdr *) (rte_pktmbuf_mtod(buf, char*) + buf->l2_len);
   if (ntohs(arphdr->arp_hrd) != ARP_HRD_ETHER ||
@@ -324,6 +328,7 @@ arp_rcv(struct rte_mbuf* buf)
 static void
 arp_internal_request_process(struct rte_mbuf* buf, struct arp_hdr* arphdr)
 {
+  RTE_LOG(DEBUG, ARP, "%s\n", __func__);
   uint8_t dst_port = get_nic_queue_id();
   if(get_nic_queue_id() == _mid) {
     struct ether_addr mac;
@@ -341,6 +346,7 @@ arp_internal_request_process(struct rte_mbuf* buf, struct arp_hdr* arphdr)
 void
 arp_internal_rcv(struct rte_mbuf* buf)
 {
+  RTE_LOG(DEBUG, ARP, "%s\n", __func__);
   struct arp_hdr* arphdr;
   arphdr = (struct arp_hdr *) (rte_pktmbuf_mtod(buf, char*) + buf->l2_len);
   if (ntohs(arphdr->arp_hrd) != ARP_HRD_ETHER ||

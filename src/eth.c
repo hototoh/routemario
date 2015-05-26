@@ -33,6 +33,7 @@ RTE_DEFINE_PER_LCORE(uint16_t, nic_queue_id);
 void
 rewrite_mac_addr(struct rte_mbuf *buf, uint8_t dst_port)
 {
+  RTE_LOG(DEBUG, ETH, "[%u] %s [%u] %s\n", rte_lcore_id(), __FILE__, __LINE__, __func__);
   if(dst_port < 0) 
     rte_pktmbuf_free(buf);
 
@@ -55,6 +56,7 @@ rewrite_mac_addr(struct rte_mbuf *buf, uint8_t dst_port)
 void
 eth_queue_xmit(uint8_t dst_port, uint16_t n)
 {
+  RTE_LOG(DEBUG, ETH, "[%u] %s [%u] %s\n", rte_lcore_id(), __FILE__, __LINE__, __func__);
   uint16_t ret;  
   struct rte_mbuf **queue = (get_eth_tx_Q(dst_port))->queue;
   ret = rte_eth_tx_burst(dst_port, get_nic_queue_id(), queue, n);
@@ -72,6 +74,7 @@ eth_queue_xmit(uint8_t dst_port, uint16_t n)
 void
 __eth_enqueue_tx_pkt(struct rte_mbuf *buf, uint8_t dst_port)
 {
+  RTE_LOG(DEBUG, ETH, "[%u] %s [%u] %s\n", rte_lcore_id(), __FILE__, __LINE__, __func__);
   struct mbuf_queue* tx_queue = get_eth_tx_Q(dst_port);  
   uint16_t len = tx_queue->len;
   tx_queue->queue[len++] = buf;
@@ -87,7 +90,9 @@ __eth_enqueue_tx_pkt(struct rte_mbuf *buf, uint8_t dst_port)
 
 /* this function is called only when routing packets from external ports. */
 void
-eth_random_enqueue_tx_pkt(struct rte_mbuf *buf, uint8_t dst_port) {
+eth_random_enqueue_tx_pkt(struct rte_mbuf *buf, uint8_t dst_port)
+{
+  RTE_LOG(DEBUG, ETH, "[%u] %s [%u] %s\n", rte_lcore_id(), __FILE__, __LINE__, __func__);
   struct ether_hdr *eth = rte_pktmbuf_mtod(buf, struct ether_hdr *);
   if (dst_port == _mid) {
     RTE_LOG(CRIT, ETH,
@@ -104,6 +109,7 @@ eth_random_enqueue_tx_pkt(struct rte_mbuf *buf, uint8_t dst_port) {
 void
 eth_enqueue_tx_packet(struct rte_mbuf *buf, uint8_t dst_port)
 {
+  RTE_LOG(DEBUG, ETH, "[%u] %s [%u] %s\n", rte_lcore_id(), __FILE__, __LINE__, __func__);
   if (dst_port == _mid)
     __eth_enqueue_tx_pkt(buf, dst_port);
   else
@@ -113,6 +119,7 @@ eth_enqueue_tx_packet(struct rte_mbuf *buf, uint8_t dst_port)
 void
 eth_enqueue_tx_pkt(struct rte_mbuf *buf, uint8_t dst_port)
 {
+  RTE_LOG(DEBUG, ETH, "[%u] %s [%u] %s\n", rte_lcore_id(), __FILE__, __LINE__, __func__);
   RTE_LOG(CRIT, ETH, "this function is deprecated\n.");
   struct ether_hdr *eth = rte_pktmbuf_mtod(buf, struct ether_hdr *);
 
@@ -229,6 +236,7 @@ ether_switching(struct rte_mbuf* buf, uint8_t src_port)
 void
 eth_input(struct rte_mbuf** bufs, uint16_t n_rx, uint8_t src_port)
 {
+  RTE_LOG(DEBUG, ETH, "[%u] %s [%u] %s\n", rte_lcore_id(), __FILE__, __LINE__, __func__);
   struct ether_addr mac;
   rte_eth_macaddr_get(src_port, &mac);
   for(uint32_t i = 0; i < n_rx; i++) {
@@ -250,7 +258,6 @@ eth_input(struct rte_mbuf** bufs, uint16_t n_rx, uint8_t src_port)
         continue;
       }
       case ETHER_TYPE_IPv4: {
-        // XXX
         ip_rcv(&buf, 1);
         continue;
       }
@@ -265,6 +272,7 @@ eth_input(struct rte_mbuf** bufs, uint16_t n_rx, uint8_t src_port)
 void
 eth_internal_input(struct rte_mbuf** bufs, uint16_t n_rx, uint8_t src_port)
 {
+  RTE_LOG(DEBUG, ETH, "[%u] %s [%u] %s\n", rte_lcore_id(), __FILE__, __LINE__, __func__);
   struct ether_addr mac;
   uint8_t dst_port = get_nic_queue_id();
   rte_eth_macaddr_get(dst_port, &mac);
@@ -279,30 +287,40 @@ eth_internal_input(struct rte_mbuf** bufs, uint16_t n_rx, uint8_t src_port)
         arp_internal_rcv(buf);
         continue;
       }
-    }
-    /*
-      {
-      uint8_t* a = (eth->s_addr).addr_bytes;
-      RTE_LOG(DEBUG, ETH, 
-      "%s MAC src %02x:%02x:%02x:%02x:%02x:%02x\n",
-      __func__, a[0], a[1], a[2], a[3], a[4], a[5]);
-      
-      a = (eth->d_addr).addr_bytes;
-      RTE_LOG(DEBUG, ETH, 
-      "%s MAC dst %02x:%02x:%02x:%02x:%02x:%02x\n",
-      __func__, a[0], a[1], a[2], a[3], a[4], a[5]);
-      
+      case ETHER_TYPE_IPv4: {
+        struct ipv4_hdr *iphdr;
+        iphdr = (struct ipv4_hdr*) (rte_pktmbuf_mtod(buf, char *) + buf->l2_len);
+        RTE_LOG(DEBUG, ETH, "[%u -> %u] %u.%u.%u.%u -> %u.%u.%u.%u\n",
+                buf->port, dst_port,
+                (s >> 24)&0xff,(s >> 16)&0xff,(s >> 8)&0xff,s&0xff,
+                (d >> 24)&0xff,(d>> 16)&0xff,(d >> 8)&0xff,d&0xff);
+        if (get_nic_queue_id() == _mid) { // internal -> external port
+          RTE_LOG(DEBUG, ETH, "to external port\n");
+          ether_addr_copy(&eth->s_addr, &eth->d_addr);
+          ether_addr_copy(&mac, &eth->s_addr);
+        } else  // internal -> internal
+          RTE_LOG(DEBUG, ETH, "to node #%u\n", dst_port);
+        
+        __eth_enqueue_tx_pkt(buf, dst_port);
+        continue;
       }
-    //*/
-
-    RTE_LOG(DEBUG, ETH, "%s (%u) %u -> %u\n", __func__, __LINE__, buf->port, dst_port);
-    if (get_nic_queue_id() == _mid) { // internal -> external port
-      RTE_LOG(DEBUG, ETH, "to external port\n");
-      ether_addr_copy(&eth->s_addr, &eth->d_addr);
-      ether_addr_copy(&mac, &eth->s_addr);
-    } else  // internal -> internal
-      RTE_LOG(DEBUG, ETH, "to node #%u\n", dst_port);
-
-    __eth_enqueue_tx_pkt(buf, dst_port);
+    }
+    rte_pktmbuf_free(buf);
   }
 }
+
+/*
+  {
+  uint8_t* a = (eth->s_addr).addr_bytes;
+  RTE_LOG(DEBUG, ETH, 
+  "%s MAC src %02x:%02x:%02x:%02x:%02x:%02x\n",
+  __func__, a[0], a[1], a[2], a[3], a[4], a[5]);
+  
+  a = (eth->d_addr).addr_bytes;
+  RTE_LOG(DEBUG, ETH, 
+  "%s MAC dst %02x:%02x:%02x:%02x:%02x:%02x\n",
+  __func__, a[0], a[1], a[2], a[3], a[4], a[5]);
+  
+  }
+//*/
+

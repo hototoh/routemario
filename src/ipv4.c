@@ -54,10 +54,10 @@ ip_routing(struct mbuf_queue* rqueue)
     struct rte_mbuf *buf = queue[i];
     struct ipv4_hdr *iphdr;
     iphdr = (struct ipv4_hdr*) (rte_pktmbuf_mtod(buf, char*) + buf->l2_len);
-    uint32_t dst = ntohl(iphdr->dst_addr);
 
     /* dst is our subnet */
     uint8_t next_index;
+    uint32_t dst = ntohl(iphdr->dst_addr);
     int res = rte_lpm_lookup(rib, dst, &next_index);
     if(res != 0) {
       RTE_LOG(DEBUG, IPV4, "not matched lpm lookup\n");
@@ -156,7 +156,7 @@ ip_rcv(struct rte_mbuf **bufs, uint16_t n_rx)
         }
         case IPPROTO_TCP: 
         case IPPROTO_UDP: 
-          RTE_LOG(DEBUG, IPV4, " %s %u ip_routing\n", __func__, __LINE__);
+          RTE_LOG(DEBUG, IPV4, " %s %u to this router so drop\n", __func__, __LINE__);
           ;
       }
       rte_pktmbuf_free(buf);
@@ -173,6 +173,7 @@ ip_rcv(struct rte_mbuf **bufs, uint16_t n_rx)
     /* this includes other ports subnet */
     int dst_port = is_own_subnet(intfs, ndst);
     if(dst_port >= 0) {
+      RTE_LOG(DEBUG, IPV4, " %s %u forwarding\n", __func__, __LINE__);
       iphdr->hdr_checksum = 0;
       iphdr->hdr_checksum = rte_ipv4_cksum(iphdr);
       rewrite_mac_addr(buf, dst_port);

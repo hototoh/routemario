@@ -28,6 +28,7 @@
 #include <rte_branch_prediction.h>
 #include <rte_byteorder.h>
 #include <rte_malloc.h>
+#include <rte_spinlock.h>
 
 #include "util.h"
 #include "interfaces.h"
@@ -41,11 +42,14 @@
 #define RTE_LOGTYPE_ARP RTE_LOGTYPE_USER2
 
 struct arp_table *arp_tb;
+//struct rte_spinlock_t arp_tb_lock;
+rte_spinlock_t arp_tb_lock;
 
 struct arp_table*
 create_arp_table(uint32_t _size)
 {
   rte_srand((unsigned) time (NULL));
+  rte_spinlock_init(&arp_tb_lock);
   uint32_t seed = (uint32_t) rte_rand();
   uint32_t size = (uint32_t) POWERROUND(_size);
   size = size > RTE_HASH_ENTRIES_MAX? RTE_HASH_ENTRIES_MAX : size;
@@ -92,7 +96,12 @@ int
 add_arp_table_entry(struct arp_table* table, const uint32_t *ip_addr,
                     const struct ether_addr* addr)
 {
-  int32_t key = rte_hash_add_key(table->handler, ip_addr);
+  int32_t key;
+  while(!rte_spinlock_trylock(&arp_tb_lock)) {
+    ;
+  }
+  key = rte_hash_add_key(table->handler, ip_addr);
+  rte_spinlock_unlock(&arp_tb_lock);
   if (key >= 0) {
     {
       uint32_t s = ntohl(*ip_addr);

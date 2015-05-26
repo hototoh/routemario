@@ -41,6 +41,11 @@
 #define RTE_LOGTYPE_ARP_TABLE RTE_LOGTYPE_USER1
 #define RTE_LOGTYPE_ARP RTE_LOGTYPE_USER2
 
+#ifdef RTE_LOG
+#undef RTE_LOG 
+#endif
+#define RTE_LOG(...) (0);
+
 struct arp_table *arp_tb;
 //struct rte_spinlock_t arp_tb_lock;
 rte_spinlock_t arp_tb_lock;

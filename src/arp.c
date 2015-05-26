@@ -194,6 +194,7 @@ arp_send_request(struct rte_mbuf* buf, uint32_t tip, uint8_t port_id)
   if (buf == NULL) {
     buf = rte_pktmbuf_alloc(rmario_pktmbuf_pool);
   }
+
   struct arp_hdr* arphdr;
   struct ether_hdr* eth = rte_pktmbuf_mtod(buf, struct ether_hdr*);
   arphdr = (struct arp_hdr *)(rte_pktmbuf_mtod(buf, char*) + buf->l2_len);
@@ -205,6 +206,7 @@ arp_send_request(struct rte_mbuf* buf, uint32_t tip, uint8_t port_id)
 
   struct l3_interface* l3_if = get_l3_interface_port_id(intfs, port_id);
   if (l3_if == NULL) goto free;
+
   struct arp_ipv4 *body = &arphdr->arp_data;
   body->arp_tip = tip;
   body->arp_sip = htonl(l3_if->ip_addr);
@@ -339,7 +341,7 @@ arp_internal_request_process(struct rte_mbuf* buf, struct arp_hdr* arphdr)
 {
   RTE_LOG(DEBUG, ARP, "%s\n", __func__);
   uint8_t dst_port = get_nic_queue_id();
-  if(get_nic_queue_id() == _mid) {
+  if(dst_port == _mid) {
     struct ether_addr mac;
     rte_eth_macaddr_get(dst_port, &mac);
 
@@ -347,6 +349,7 @@ arp_internal_request_process(struct rte_mbuf* buf, struct arp_hdr* arphdr)
     struct arp_ipv4 *body = &arphdr->arp_data;
     ether_addr_copy(&mac, &body->arp_sha);
     memset(&eth->d_addr  , 0xff, ETHER_ADDR_LEN);
+    memset(&body->arp_tha  , 0xff, ETHER_ADDR_LEN);
     ether_addr_copy(&mac, &eth->s_addr);
   }
 
@@ -358,9 +361,35 @@ arp_internal_request_process(struct rte_mbuf* buf, struct arp_hdr* arphdr)
             (s >> 24)&0xff,(s >> 16)&0xff,(s >> 8)&0xff,s&0xff,
             dst_port
             );
+  
+  {
+    struct ether_hdr *eth = rte_pktmbuf_mtod(buf, struct ether_hdr *);
+    struct arp_ipv4 *body = &arphdr->arp_data;
+    uint8_t *a = (body->arp_sha).addr_bytes;
+    RTE_LOG(DEBUG, ARP, "%s\n", __func__);
+    RTE_LOG(DEBUG, ARP, 
+            "ARP src %02x:%02x:%02x:%02x:%02x:%02x\n",
+            a[0], a[1], a[2], a[3], a[4], a[5]);
+
+    a = (body->arp_tha).addr_bytes;
+    RTE_LOG(DEBUG, ARP, 
+            "ARP target %02x:%02x:%02x:%02x:%02x:%02x\n",
+            a[0], a[1], a[2], a[3], a[4], a[5]);
+
+    a = (eth->s_addr).addr_bytes;
+    RTE_LOG(DEBUG, ARP, 
+            "MAC src %02x:%02x:%02x:%02x:%02x:%02x\n",
+            a[0], a[1], a[2], a[3], a[4], a[5]);
+
+    a = (eth->d_addr).addr_bytes;
+    RTE_LOG(DEBUG, ARP, 
+            "MAC dst %02x:%02x:%02x:%02x:%02x:%02x\n",
+            a[0], a[1], a[2], a[3], a[4], a[5]);
+    
+  }
+  // */
   }
   __eth_enqueue_tx_pkt(buf, dst_port); 
-
 }
 
 void

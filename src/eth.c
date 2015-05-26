@@ -93,7 +93,6 @@ __eth_enqueue_tx_pkt(struct rte_mbuf *buf, uint8_t dst_port)
 void
 eth_random_enqueue_tx_pkt(struct rte_mbuf *buf, uint8_t dst_port)
 {
-  RTE_LOG(DEBUG, ETH, "[%u] %s [%u] %s\n", rte_lcore_id(), __FILE__, __LINE__, __func__);
   struct ether_hdr *eth = rte_pktmbuf_mtod(buf, struct ether_hdr *);
   if (dst_port == _mid) {
     RTE_LOG(CRIT, ETH,
@@ -101,10 +100,16 @@ eth_random_enqueue_tx_pkt(struct rte_mbuf *buf, uint8_t dst_port)
     assert(false);
   }
 
-  dst_port = forwarding_node_id(buf->hash.rss);
   ether_addr_copy(&eth->d_addr, &eth->s_addr);
   eth->d_addr.addr_bytes[0] = (uint8_t)(0xf + (dst_port << 4));
-  __eth_enqueue_tx_pkt(buf, dst_port);
+  {
+    uint8_t* a = (eth->d_addr).addr_bytes;
+    RTE_LOG(DEBUG, ETH, "[%u] %s [%u] %s dst_port %u %02x:%02x:%02x:%02x:%02x:%02x\n",
+            rte_lcore_id(), __FILE__, __LINE__, __func__, dst_port,
+            a[0], a[1], a[2], a[3], a[4], a[5]);
+  }
+  uint8_t middle_node = forwarding_node_id(buf->hash.rss);
+  __eth_enqueue_tx_pkt(buf, middle_node);
 }
 
 void

@@ -12,7 +12,7 @@
 
 #include "mbuf_queue.h"
 
-#define MAX_PKT_BURST 1
+#define MAX_PKT_BURST 32
 #define MAX_PORT 4
 
 int

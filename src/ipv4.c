@@ -167,11 +167,13 @@ ip_rcv(struct rte_mbuf **bufs, uint16_t n_rx)
     }
 
     /* packets to other hosts. */
-    /* check the TTL */    
-    if((--(iphdr->time_to_live) <= 0)) {
+    /* check the TTL */ 
+    uint16_t ttl = ntohs(iphdr->time_to_live);
+    if((--ttl <= 0)) {
       icmp_send_time_exceeded(buf, ndst);
       continue;
     }
+    iphdr->time_to_live = htons(ttl);
 
     /* this includes other ports subnet */
     int dst_port = is_own_subnet(intfs, ndst);

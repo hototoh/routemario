@@ -93,14 +93,14 @@ add_arp_table_entry(struct arp_table* table, const uint32_t *ip_addr,
 {
   int32_t key = rte_hash_add_key(table->handler, ip_addr);
   if (key >= 0) {
-  {
-    uint32_t s = ntohl(*ip_addr);
-    uint8_t *a = addr->addr_bytes;
-    RTE_LOG(DEBUG, ARP, 
-            " %u.%u.%u.%u <=> %02x:%02x:%02x:%02x:%02x:%02x\n",
-            (s >> 24)&0xff,(s >> 16)&0xff,(s >> 8)&0xff,s&0xff,
-            a[0], a[1], a[2], a[3], a[4], a[5]);
-  }
+    {
+      uint32_t s = ntohl(*ip_addr);
+      uint8_t *a = addr->addr_bytes;
+      RTE_LOG(DEBUG, ARP, 
+              " %u.%u.%u.%u <=> %02x:%02x:%02x:%02x:%02x:%02x\n",
+              (s >> 24)&0xff,(s >> 16)&0xff,(s >> 8)&0xff,s&0xff,
+              a[0], a[1], a[2], a[3], a[4], a[5]);
+    }
     struct arp_table_entry *entry = &table->items[key];
     ether_addr_copy(addr, &entry->eth_addr);
     entry->ip_addr = *ip_addr;
@@ -299,7 +299,7 @@ arp_reply_process(struct rte_mbuf* buf, struct arp_hdr* arphdr, bool internal)
   // broadcast to all the other nodes
   uint8_t port_num = rte_eth_dev_count();
   for (uint8_t port_id = 0, i = 0; port_id < port_num; port_id++) {
-    RTE_LOG(DEBUG, ARP, "broadcast arp entry%s\n", __func__);
+    RTE_LOG(DEBUG, ARP, "%s broadcast arp entry\n", __func__);
     if (port_id == buf->port) continue;
     
     struct rte_mbuf* _buf = buf;
@@ -337,6 +337,7 @@ arp_rcv(struct rte_mbuf* buf)
 static void
 arp_internal_request_process(struct rte_mbuf* buf, struct arp_hdr* arphdr)
 {
+  RTE_LOG(DEBUG, ARP, "%s\n", __func__);
   uint8_t dst_port = get_nic_queue_id();
   if(get_nic_queue_id() == _mid) {
     struct ether_addr mac;

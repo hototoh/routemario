@@ -288,12 +288,16 @@ eth_internal_input(struct rte_mbuf** bufs, uint16_t n_rx, uint8_t src_port)
         continue;
       }
       case ETHER_TYPE_IPv4: {
-        struct ipv4_hdr *iphdr;
-        iphdr = (struct ipv4_hdr*) (rte_pktmbuf_mtod(buf, char *) + buf->l2_len);
-        RTE_LOG(DEBUG, ETH, "[%u -> %u] %u.%u.%u.%u -> %u.%u.%u.%u\n",
-                buf->port, dst_port,
-                (s >> 24)&0xff,(s >> 16)&0xff,(s >> 8)&0xff,s&0xff,
-                (d >> 24)&0xff,(d>> 16)&0xff,(d >> 8)&0xff,d&0xff);
+        {
+          struct ipv4_hdr *iphdr;
+          iphdr = (struct ipv4_hdr*) (rte_pktmbuf_mtod(buf, char *) + buf->l2_len);
+          uint32_t d = ntohl(iphdr->dst_addr);
+          uint32_t s = ntohl(iphdr->src_addr);
+          RTE_LOG(DEBUG, ETH, "[%u -> %u] %u.%u.%u.%u -> %u.%u.%u.%u\n",
+                  buf->port, dst_port,
+                  (s >> 24)&0xff,(s >> 16)&0xff,(s >> 8)&0xff,s&0xff,
+                  (d >> 24)&0xff,(d>> 16)&0xff,(d >> 8)&0xff,d&0xff);
+        }
         if (get_nic_queue_id() == _mid) { // internal -> external port
           RTE_LOG(DEBUG, ETH, "to external port\n");
           ether_addr_copy(&eth->s_addr, &eth->d_addr);

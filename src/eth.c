@@ -100,15 +100,15 @@ eth_random_enqueue_tx_pkt(struct rte_mbuf *buf, uint8_t dst_port)
     assert(false);
   }
 
+  uint8_t middle_node = forwarding_node_id(buf->hash.rss);
   ether_addr_copy(&eth->d_addr, &eth->s_addr);
   eth->d_addr.addr_bytes[0] = (uint8_t)(0xf + (dst_port << 4));
   {
     uint8_t* a = (eth->d_addr).addr_bytes;
-    RTE_LOG(DEBUG, ETH, "[%u] %s [%u] %s dst_port %u %02x:%02x:%02x:%02x:%02x:%02x\n",
-            rte_lcore_id(), __FILE__, __LINE__, __func__, dst_port,
-            a[0], a[1], a[2], a[3], a[4], a[5]);
+    RTE_LOG(DEBUG, ETH, "[%u] %s [%u] %s %02x:%02x:%02x:%02x:%02x:%02x dst_port %u middle: %u\n",
+            rte_lcore_id(), __FILE__, __LINE__, __func__, 
+            a[0], a[1], a[2], a[3], a[4], a[5], dst_port, middle_node);
   }
-  uint8_t middle_node = forwarding_node_id(buf->hash.rss);
   __eth_enqueue_tx_pkt(buf, middle_node);
 }
 
@@ -243,7 +243,7 @@ ether_switching(struct rte_mbuf* buf, uint8_t src_port)
 void
 eth_input(struct rte_mbuf** bufs, uint16_t n_rx, uint8_t src_port)
 {
-  RTE_LOG(DEBUG, ETH, "[%u] %s [%u] %s\n", rte_lcore_id(), __FILE__, __LINE__, __func__);
+  RTE_LOG(DEBUG, ETH, "[%u] %s [%u] %s num %u\n", rte_lcore_id(), __FILE__, __LINE__, __func__, n_rx);
   struct ether_addr mac;
   rte_eth_macaddr_get(src_port, &mac);
   assert(_mid == src_port);
@@ -281,7 +281,7 @@ void
 eth_internal_input(struct rte_mbuf** bufs, uint16_t n_rx, uint8_t src_port)
 {
   uint8_t dst_port = get_nic_queue_id();
-  RTE_LOG(DEBUG, ETH, " %s[%u] [Core-%u][Port-%u][Q#%u] %s\n",
+  RTE_LOG(DEBUG, ETH, "%s [%u] [Core-%u][Port-%u][Q#%u] %s\n",
           __FILE__, __LINE__, rte_lcore_id(), src_port, dst_port, __func__);
   struct ether_addr mac;
   rte_eth_macaddr_get(dst_port, &mac);

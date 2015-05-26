@@ -45,7 +45,7 @@ rewrite_mac_addr(struct rte_mbuf *buf, uint8_t dst_port, uint32_t next_hop)
   struct ether_hdr *eth = rte_pktmbuf_mtod(buf, struct ether_hdr *);
   iphdr = (struct ipv4_hdr*) (rte_pktmbuf_mtod(buf, char *) + buf->l2_len);
   entry = lookup_arp_table_entry(arp_tb, next_hop);
-  if (entry == NULL) || (is_expired(entry))) {
+  if ((entry == NULL) || (is_expired(entry))) {
     arp_send_request(buf, iphdr->dst_addr, dst_port);
     return 1;
   }

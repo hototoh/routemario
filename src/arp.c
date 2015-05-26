@@ -337,7 +337,6 @@ arp_rcv(struct rte_mbuf* buf)
 static void
 arp_internal_request_process(struct rte_mbuf* buf, struct arp_hdr* arphdr)
 {
-  RTE_LOG(DEBUG, ARP, "%s\n", __func__);
   uint8_t dst_port = get_nic_queue_id();
   if(get_nic_queue_id() == _mid) {
     struct ether_addr mac;
@@ -348,6 +347,15 @@ arp_internal_request_process(struct rte_mbuf* buf, struct arp_hdr* arphdr)
     ether_addr_copy(&mac, &body->arp_sha);
     memset(&eth->d_addr  , 0xff, ETHER_ADDR_LEN);
     ether_addr_copy(&mac, &eth->s_addr);
+  }
+  {
+    struct arp_ipv4 *body = &arphdr->arp_data;
+    uint32_t s = ntohl(body->arp_tip);
+    RTE_LOG(DEBUG, ARP, "[%u] %s [%u] %s Request %u.%u.%u.%u\n => $u",
+            rte_lcore_id(), __FILE__, __LINE__, __func__,
+            (s >> 24)&0xff,(s >> 16)&0xff,(s >> 8)&0xff,s&0xff,
+            dst_port
+            );
   }
   __eth_enqueue_tx_pkt(buf, dst_port); 
 }

@@ -110,7 +110,7 @@ ip_enqueue_pkt(struct mbuf_queue* rqueue, struct rte_mbuf* buf)
   iphdr->hdr_checksum = 0;
   iphdr->hdr_checksum = rte_ipv4_cksum(iphdr);
 
-  if(rewrite_mac_addr(buf, dst_port))
+  if(!rewrite_mac_addr(buf, dst_port))
     eth_enqueue_tx_packet(buf, dst_port);
 }
 

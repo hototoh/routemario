@@ -158,7 +158,7 @@ ip_rcv(struct rte_mbuf **bufs, uint16_t n_rx)
         }
         case IPPROTO_TCP: 
         case IPPROTO_UDP: 
-          RTE_LOG(DEBUG, IPV4, " %s %u to this router so drop\n", __func__, __LINE__);
+          RTE_LOG(DEBUG, IPV4, "[%u] %s %u %s to this router so drop\n", rte_lcore_id(), __FILE__, __LINE__, __func__);
           ;
       }
       rte_pktmbuf_free(buf);
@@ -175,7 +175,7 @@ ip_rcv(struct rte_mbuf **bufs, uint16_t n_rx)
     /* this includes other ports subnet */
     int dst_port = is_own_subnet(intfs, ndst);
     if(dst_port >= 0) {
-      RTE_LOG(DEBUG, IPV4, " %s %u forwarding\n", __func__, __LINE__);
+      RTE_LOG(DEBUG, IPV4, "[%u] %s %u %s forwarding\n", rte_lcore_id(), __FILE__, __LINE__, __func__);
       iphdr->hdr_checksum = 0;
       iphdr->hdr_checksum = rte_ipv4_cksum(iphdr);
       rewrite_mac_addr(buf, dst_port);
@@ -184,7 +184,7 @@ ip_rcv(struct rte_mbuf **bufs, uint16_t n_rx)
     }
 
     if (unlikely(ip_enqueue_routing_pkt(rq, buf))) {
-      RTE_LOG(DEBUG, IPV4, " %s %u ip_routing\n", __func__, __LINE__);
+      RTE_LOG(DEBUG, IPV4, "[%u] %s %u %s ip routing\n", rte_lcore_id(), __FILE__, __LINE__, __func__);
       ip_routing(rq);
     }
   }  

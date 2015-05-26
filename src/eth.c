@@ -67,7 +67,7 @@ eth_queue_xmit(uint8_t dst_port, uint16_t n)
     } while(++ret < n);
   }
 
-  //get_eth_tx_Q(dst_port)->len = 0;
+  get_eth_tx_Q(dst_port)->len = 0;
   return ;
 }
 
@@ -116,6 +116,7 @@ eth_enqueue_tx_packet(struct rte_mbuf *buf, uint8_t dst_port)
     eth_random_enqueue_tx_pkt(buf, dst_port);
 }
 
+#if 0
 void
 eth_enqueue_tx_pkt(struct rte_mbuf *buf, uint8_t dst_port)
 {
@@ -188,7 +189,7 @@ eth_enqueue_tx_pkt(struct rte_mbuf *buf, uint8_t dst_port)
 
   __eth_enqueue_tx_pkt(buf, dst_port);
 }
-
+#
 #ifdef L2SWITCHING
 /*
 static void
@@ -239,6 +240,7 @@ eth_input(struct rte_mbuf** bufs, uint16_t n_rx, uint8_t src_port)
   RTE_LOG(DEBUG, ETH, "[%u] %s [%u] %s\n", rte_lcore_id(), __FILE__, __LINE__, __func__);
   struct ether_addr mac;
   rte_eth_macaddr_get(src_port, &mac);
+  assert(_mid == src_port);
   for(uint32_t i = 0; i < n_rx; i++) {
     struct rte_mbuf* buf = bufs[i];
     rte_prefetch0(rte_pktmbuf_mtod(buf, void *));

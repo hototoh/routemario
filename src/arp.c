@@ -93,6 +93,14 @@ add_arp_table_entry(struct arp_table* table, const uint32_t *ip_addr,
 {
   int32_t key = rte_hash_add_key(table->handler, ip_addr);
   if (key >= 0) {
+  {
+    uint32_t s = ntohl(*ip_addr);
+    uint8_t *a = addr->addr_bytes;
+    RTE_LOG(DEBUG, ARP, 
+            " %u.%u.%u.%u <=> %02x:%02x:%02x:%02x:%02x:%02x\n",
+            (s >> 24)&0xff,(s >> 16)&0xff,(s >> 8)&0xff,s&0xff,
+            a[0], a[1], a[2], a[3], a[4], a[5]);
+  }
     struct arp_table_entry *entry = &table->items[key];
     ether_addr_copy(addr, &entry->eth_addr);
     entry->ip_addr = *ip_addr;
@@ -151,7 +159,7 @@ lookup_arp_table_entry(struct arp_table* table, const uint32_t *ip_addr)
       break;
     case ENOENT:
       ;
-      //RTE_LOG(WARNING, ARP_TABLE, "the key is not found.\n");
+      RTE_LOG(WARNING, ARP_TABLE, "the key is not found.\n");
       /* break through */
   }
   return NULL;
@@ -163,6 +171,7 @@ lookup_bulk_arp_table_entries(struct arp_table *table,
                               uint32_t num_entry,
                               struct arp_table_entry** entries)
 {
+  RTE_LOG(DEBUG, ARP, "%s\n", __func__);
   int32_t positions[num_entry];
   int res = rte_hash_lookup_bulk(table->handler, (const void**) ip_addrs,
                                  num_entry, (int32_t*) positions);
@@ -275,9 +284,9 @@ out:
 }
 
 static void
-arp_reply_process(struct rte_mbuf* buf, struct arp_hdr* arphdr, bool internal)
-                  
+arp_reply_process(struct rte_mbuf* buf, struct arp_hdr* arphdr, bool internal)                  
 {
+  RTE_LOG(DEBUG, ARP, "%s\n", __func__);
   int res = 0;
   struct arp_ipv4 *body = &arphdr->arp_data;
 

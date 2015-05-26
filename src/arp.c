@@ -112,7 +112,8 @@ add_arp_table_entry(struct arp_table* table, const uint32_t *ip_addr,
       uint32_t s = ntohl(*ip_addr);
       uint8_t *a = addr->addr_bytes;
       RTE_LOG(DEBUG, ARP, 
-              " %u.%u.%u.%u <=> %02x:%02x:%02x:%02x:%02x:%02x\n",
+              "%s %u.%u.%u.%u <=> %02x:%02x:%02x:%02x:%02x:%02x\n",
+              __func__,
               (s >> 24)&0xff,(s >> 16)&0xff,(s >> 8)&0xff,s&0xff,
               a[0], a[1], a[2], a[3], a[4], a[5]);
     }
@@ -123,6 +124,7 @@ add_arp_table_entry(struct arp_table* table, const uint32_t *ip_addr,
     return 0;
   }
 
+  RTE_LOG(WARNING, ARP_TABLE, "cannot add the key.\n");
   if (key == -ENOSPC) {
     RTE_LOG(WARNING, ARP_TABLE, "no space in the hash for this key.\n");
   }
@@ -312,7 +314,7 @@ arp_reply_process(struct rte_mbuf* buf, struct arp_hdr* arphdr, bool internal)
       uint32_t sip = ntohl(body->arp_sip);
       uint32_t dip = ntohl(body->arp_tip);
       RTE_LOG(DEBUG, ARP, 
-              "[%u] Port   => %u\t%s %u \n"
+              "[%u] Port  %u  => \t%s %u \n"
               "ARP src %02x:%02x:%02x:%02x:%02x:%02x => target %02x:%02x:%02x:%02x:%02x:%02x\n"
               "MAC src %02x:%02x:%02x:%02x:%02x:%02x => target %02x:%02x:%02x:%02x:%02x:%02x\n"
               "IP  %u.%u.%u.%u -> %u.%u.%u.%u\n",

@@ -16,7 +16,7 @@
 #define MAX_PORT 4
 
 int
-rewrite_mac_addr(struct rte_mbuf *buf, uint8_t dst_port);
+rewrite_mac_addr(struct rte_mbuf *buf, uint8_t dst_port, uint32_t next_hop);
 
 void
 eth_input(struct rte_mbuf** bufs, uint16_t n_rx, uint8_t src_port);

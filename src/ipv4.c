@@ -76,7 +76,7 @@ ip_routing(struct mbuf_queue* rqueue)
 
     iphdr->hdr_checksum = 0;
     iphdr->hdr_checksum = rte_ipv4_cksum(iphdr);
-    if(!rewrite_mac_addr(buf, dst_port)) 
+    if(!rewrite_mac_addr(buf, dst_port, htonl(next_hop))) 
       eth_enqueue_tx_packet(buf, dst_port);
   }
   rqueue->len = 0;
@@ -108,10 +108,10 @@ ip_enqueue_pkt(struct mbuf_queue* rqueue, struct rte_mbuf* buf)
     return;
   }
 
+  // XXX to fix call ip_enqueu_routing_pkt for longest prefix match.
   iphdr->hdr_checksum = 0;
   iphdr->hdr_checksum = rte_ipv4_cksum(iphdr);
-
-  if(!rewrite_mac_addr(buf, dst_port))
+  if(!rewrite_mac_addr(buf, dst_port, iphdr->dst_addr))
     eth_enqueue_tx_packet(buf, dst_port);
 }
 
@@ -182,7 +182,7 @@ ip_rcv(struct rte_mbuf **bufs, uint16_t n_rx)
       RTE_LOG(DEBUG, IPV4, "[%u] %s %u %s forwarding\n", rte_lcore_id(), __FILE__, __LINE__, __func__);
       iphdr->hdr_checksum = 0;
       iphdr->hdr_checksum = rte_ipv4_cksum(iphdr);
-      if(!rewrite_mac_addr(buf, dst_port)) 
+      if(!rewrite_mac_addr(buf, dst_port, iphdr->dst_addr)) 
         eth_enqueue_tx_packet(buf, dst_port);
       continue;
     }

@@ -105,7 +105,7 @@ add_arp_table_entry(struct arp_table* table, const uint32_t *ip_addr,
   while(!rte_spinlock_trylock(&arp_tb_lock)) {
     ;
   }
-  key = rte_hash_add_key(table->handler, ip_addr);
+  key = rte_hash_add_key(table->handler, (void*)ip_addr);
   rte_spinlock_unlock(&arp_tb_lock);
   if (key >= 0) {
     {

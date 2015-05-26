@@ -39,7 +39,12 @@ rewrite_mac_addr(struct rte_mbuf *buf, uint8_t dst_port, uint32_t next_hop)
 
   struct ether_addr mac;
   rte_eth_macaddr_get(dst_port, &mac);
-
+  {
+    uint32_t s = ntohl(next_hop);
+    RTE_LOG(DEBUG, IPV4, "[%u] %s [%u] %s %u.%u.%u.%u\n", rte_lcore_id(), __FILE__, __LINE__, __func__,
+            (s >> 24)&0xff,(s >> 16)&0xff,(s >> 8)&0xff,s&0xff,
+  }
+  
   struct ipv4_hdr *iphdr;
   struct arp_table_entry *entry;
   struct ether_hdr *eth = rte_pktmbuf_mtod(buf, struct ether_hdr *);

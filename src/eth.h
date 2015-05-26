@@ -15,7 +15,7 @@
 #define MAX_PKT_BURST 1
 #define MAX_PORT 4
 
-void
+int
 rewrite_mac_addr(struct rte_mbuf *buf, uint8_t dst_port);
 
 void

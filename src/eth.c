@@ -30,7 +30,7 @@
 RTE_DEFINE_PER_LCORE(struct mbuf_queues *, eth_tx_queue);
 RTE_DEFINE_PER_LCORE(uint16_t, nic_queue_id);
 
-void
+int
 rewrite_mac_addr(struct rte_mbuf *buf, uint8_t dst_port)
 {
   RTE_LOG(DEBUG, ETH, "[%u] %s [%u] %s\n", rte_lcore_id(), __FILE__, __LINE__, __func__);
@@ -47,10 +47,11 @@ rewrite_mac_addr(struct rte_mbuf *buf, uint8_t dst_port)
   entry = lookup_arp_table_entry(arp_tb, &iphdr->dst_addr);
   if (entry == NULL || (is_expired(entry))) {
     arp_send_request(buf, iphdr->dst_addr, dst_port);
-    return;
+    return 1;
   }
   ether_addr_copy(&entry->eth_addr, &eth->d_addr);
-  ether_addr_copy(&mac, &eth->s_addr);   
+  ether_addr_copy(&mac, &eth->s_addr);
+  return 0;
 }
 
 void
@@ -243,11 +244,11 @@ ether_switching(struct rte_mbuf* buf, uint8_t src_port)
 void
 eth_input(struct rte_mbuf** bufs, uint16_t n_rx, uint8_t src_port)
 {
-  RTE_LOG(DEBUG, ETH, "[%u] %s [%u] %s num %u\n", rte_lcore_id(), __FILE__, __LINE__, __func__, n_rx);
   struct ether_addr mac;
   rte_eth_macaddr_get(src_port, &mac);
   assert(_mid == src_port);
   for(uint32_t i = 0; i < n_rx; i++) {
+  RTE_LOG(DEBUG, ETH, "[%u] %s [%u] %s %u\n", rte_lcore_id(), __FILE__, __LINE__, __func__, i);
     struct rte_mbuf* buf = bufs[i];
     rte_prefetch0(rte_pktmbuf_mtod(buf, void *));
     

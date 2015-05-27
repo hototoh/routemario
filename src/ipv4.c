@@ -169,25 +169,22 @@ ip_rcv(struct rte_mbuf **bufs, uint16_t n_rx)
 
     /* packets to other hosts. */
     /* check the TTL */ 
-    uint16_t ttl = ntohs(iphdr->time_to_live);
-    if((--ttl <= 0)) {
+    if((--(iphdr>time_to_live)) <= 0) {
+      RTE_LOG(DEBUG, IPV4, "TTL exceeded\n");
       icmp_send_time_exceeded(buf, ndst);
       continue;
     }
-    iphdr->time_to_live = htons(ttl);
 
     /* this includes other ports subnet */
     int dst_port = is_own_subnet(intfs, ndst);
     if(dst_port >= 0) {
-      RTE_LOG(DEBUG, IPV4, "[%u] %s %u %s forwarding\n", rte_lcore_id(), __FILE__, __LINE__, __func__);
       iphdr->hdr_checksum = 0;
       iphdr->hdr_checksum = rte_ipv4_cksum(iphdr);
       if(!rewrite_mac_addr(buf, dst_port, iphdr->dst_addr)) {
         RTE_LOG(DEBUG, IPV4, "[%u] %s %u %s forwarding\n", rte_lcore_id(), __FILE__, __LINE__, __func__);
         eth_enqueue_tx_packet(buf, dst_port);
       }
-      RTE_LOG(DEBUG, IPV4, "[%u] %s %u %s forwarding\n", rte_lcore_id(), __FILE__, __LINE__, __func__);
-      
+      RTE_LOG(DEBUG, IPV4, "[%u] %s %u %s forwarding fin\n", rte_lcore_id(), __FILE__, __LINE__, __func__);
       continue;
     }
     assert(false);

@@ -87,5 +87,3 @@ destroy_mbuf_queues(struct mbuf_queues *queues)
   }
   mfree(queues);
 }
-
-

@@ -2,6 +2,7 @@
  * Hiroshi Tokaku <tkk@hongo.wide.ad.jp>
  **/
 
+#define NDEBUG
 #include <stdio.h>
 #include <stdint.h>
 #include <stdbool.h>
@@ -32,6 +33,7 @@
 #include "fdb.h"
 #include "mario_config.h"
 #include "global_mario.h"
+
 
 #define mmalloc(x) rte_malloc("rmario", (x), 0)
 #define mfree(x) rte_free((x))

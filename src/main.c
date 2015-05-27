@@ -38,6 +38,7 @@
 #define mfree(x) rte_free((x))
 
 #define RTE_LOGTYPE_MARIO RTE_LOGTYPE_USER1
+#define RTE_LOGTYPE_STATS RTE_LOGTYPE_USER2
 
 #define BURST_TX_DRAIN_US 100 /* TX drain every ~100us */
 #define NB_MBUF   8192
@@ -95,10 +96,73 @@ static struct ether_addr rmario_ports_eth_addr[RTE_MAX_ETHPORTS];
 struct rte_mempool *rmario_pktmbuf_pool = NULL;
 static unsigned int rmario_rx_queue_per_lcore = RTE_MAX_ETHPORTS;
 
-#define TIMER_MILLISECOND 2000000ULL /* around 1ms at 2 Ghz */
-#define MAX_TIMER_PERIOD 86400 /* 1 day max */
+
+/* A tsc-based timer responsible for triggering statistics printout */
+ /* around 1ms at 2 Ghz */
+#define TIMER_MILLISECOND 3500000ULL
+/* 1 day max */
+#define MAX_TIMER_PERIOD 86400 
 /* default period is 10 seconds */
-static int64_t timer_period = 5 * TIMER_MILLISECOND * 1000;
+static int64_t timer_period = 10 * TIMER_MILLISECOND * 1000; 
+
+char host_names[10][4] = {"peach",
+                          "mario",
+                          "yoshi", 
+                          "luigi"};
+
+void
+show_unit(double bps, char *unit)
+{
+  if(1000*1000*1000 < bps){
+    printf("%f G%s", doublebps/1000/1000/1000, unit);
+  }else if(1000*1000 < bps){
+    printf("%f M%s", doublebps/1000/1000, unit);
+  }else if(1000 < bps){
+    printf("%f K%s", doublebps/1000, unit);
+  }else{
+    printf("%lu %s", bps, unit);
+  }
+}
+
+void
+print_stats()
+{
+  struct rte_eth_stats stats;
+  uint8_t n_ports = rte_eth_dev_count();
+      
+  printf("\t\tIN\tOUT\tIN\tOUT\n");
+  for (uint8_t i = 0; i < n_ports; i++) {
+    if (i == _mid)
+      RTE_LOG(INFO, STATS, "EXTERNAL: ");
+    else 
+      RTE_LOG(INFO, STATS, "To %s: ", host_names[i]);
+
+    int ret = rte_eth_stats_get(i, &stats);
+    if (ret)  {
+      printf("\n");
+      continue;
+    }
+   
+    printf("ipackets:%lu ", stats.ipackets);
+    printf("opackets:%lu ", stats.opackets);
+    printf("ibytes:%lu ", stats.ibytes);
+    printf("obytes:%lu ", stats.obytes);
+    printf("\n");
+
+    show_unit((stats.ibytes-ibytes_old[i])/10.0);
+    printf("\t");
+    show_unit((double)stats.ipackets /10.0, "pps");
+    printf("\t");
+    show_unit((double)stats.opackets /10.0, "pps");
+    printf("\t");
+    show_unit((double)stats.ibytes /10.0, "bps");
+    printf("\t");
+    show_unit((double)stats.obytes /10.0, "bps");
+    printf("\n");
+
+    rte_eth_stats_reset(i);
+  }
+}
 
 static void
 rmario_main_process(void)
@@ -113,6 +177,7 @@ rmario_main_process(void)
   RTE_LOG(INFO, MARIO, "[%u] Main loop start.\n",lcore_id);
 	prev_tsc = 0;
 	timer_tsc = 0;
+  stats_tsc = 0;
   while(1) {
     cur_tsc = rte_rdtsc();
     
@@ -123,6 +188,20 @@ rmario_main_process(void)
 				if (len == 0) continue;
         eth_queue_xmit(port_id, len);
         (get_eth_tx_Q(port_id))->len = 0;
+      }
+
+      if (timer_period > 0) {
+        /* advance the timer */
+        timer_tsc += diff_tsc;
+        /* if timer has reached its timeout */
+        if (unlikely(timer_tsc >= (uint64_t) timer_period)) {
+          /* do this only on master core */
+          if (lcore_id == rte_get_master_lcore()) {
+            print_stats();
+            /* reset the timer */
+            timer_tsc = 0;
+          }
+        }
       }
       prev_tsc = cur_tsc;
     }
@@ -147,6 +226,7 @@ static int
 rmario_launch_one_lcore(void * unused)
 {
 	// RTE_LOG(INFO, MARIO, "[%u] Processing launch\n", rte_lcore_id());
+  rte_eth_stats_reset(i);
   set_nic_queue_id(rte_lcore_id());
   struct mbuf_queue *q = create_mbuf_queue(MAX_ROUTING_TX);
   if (q == NULL) {

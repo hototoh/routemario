@@ -41,6 +41,8 @@
 #define RTE_LOGTYPE_ARP_TABLE RTE_LOGTYPE_USER1
 #define RTE_LOGTYPE_ARP RTE_LOGTYPE_USER2
 
+//#define rte_pktmbuf_free(__VA_ARGS__) 
+
 //#ifdef RTE_LOG
 //#undef RTE_LOG 
 //#endif
@@ -95,7 +97,7 @@ void
 destroy_arp_table(struct arp_table* table)
 {
   rte_hash_free(table->handler);
-  mfree(table->items);
+  mfree(table);
 }
 
 int
@@ -373,7 +375,10 @@ arp_rcv(struct rte_mbuf* buf)
   if (ntohs(arphdr->arp_hrd) != ARP_HRD_ETHER ||
       ntohs(arphdr->arp_pro) != ETHER_TYPE_IPv4 ||
       arphdr->arp_hln        != ETHER_ADDR_LEN ||
-      arphdr->arp_pln        != sizeof(uint32_t) ) return ;
+      arphdr->arp_pln        != sizeof(uint32_t) ) {
+      rte_pktmbuf_free(buf);
+      return ;
+  }
 
   switch(ntohs(arphdr->arp_op)) {
     case ARP_OP_REQUEST: {

@@ -35,7 +35,7 @@
 #include "arp.h"
 #include "global_mario.h"
 
-#define mmalloc(x) rte_malloc("fdb", (x), 0)
+#define mmalloc(x) rte_malloc("arp", (x), 0)
 #define mfree(x) rte_free((x))
 
 #define RTE_LOGTYPE_ARP_TABLE RTE_LOGTYPE_USER1
@@ -58,7 +58,7 @@ create_arp_table(uint32_t _size)
   uint32_t seed = (uint32_t) rte_rand();
   uint32_t size = (uint32_t) POWERROUND(_size);
   size = size > RTE_HASH_ENTRIES_MAX? RTE_HASH_ENTRIES_MAX : size;
-  printf("HASH SIZE: %u\n", size);
+  printf("HASH SIZE: %u sizeof(uint32_t)=%u\n ", size, sizeof(uint32_t));
 
   struct arp_table *table;
   table = (struct arp_table*) mmalloc(sizeof(struct arp_table) +
@@ -72,7 +72,7 @@ create_arp_table(uint32_t _size)
     .name = "arp_table",
     .entries = size,
     .bucket_entries = RTE_HASH_BUCKET_ENTRIES_MAX,
-    .key_len = 4,
+    .key_len = sizeof(uint32_t),
     .hash_func = rte_jhash,
     .hash_func_init_val = seed,
     .socket_id = (int) rte_socket_id()
@@ -106,7 +106,7 @@ add_arp_table_entry(struct arp_table* table, const uint32_t *ip_addr,
   while(!rte_spinlock_trylock(&arp_tb_lock)) {
     ;
   }
-  key = rte_hash_add_key(table->handler, (void*)ip_addr);
+  key = rte_hash_add_key(table->handler, (const void*)ip_addr);
   rte_spinlock_unlock(&arp_tb_lock);
   if (key >= 0) {
     {
@@ -169,7 +169,7 @@ lookup_arp_table_entry(struct arp_table* table, const uint32_t *ip_addr)
   while(!rte_spinlock_trylock(&arp_tb_lock)) {
     ;
   }
-  int32_t key = rte_hash_lookup(table->handler, (void*) ip_addr);
+  int32_t key = rte_hash_lookup(table->handler, (const void*) ip_addr);
   rte_spinlock_unlock(&arp_tb_lock);
   {
     uint32_t s = ntohl(*ip_addr);

@@ -403,9 +403,9 @@ arp_internal_request_process(struct rte_mbuf* buf, struct arp_hdr* arphdr)
     struct ether_hdr *eth = rte_pktmbuf_mtod(buf, struct ether_hdr *);
     struct arp_ipv4 *body = &arphdr->arp_data;
     ether_addr_copy(&mac, &body->arp_sha);
+    ether_addr_copy(&mac, &eth->s_addr);
     memset(&eth->d_addr  , 0xff, ETHER_ADDR_LEN);
     memset(&body->arp_tha  , 0xff, ETHER_ADDR_LEN);
-    ether_addr_copy(&mac, &eth->s_addr);
   } 
   
 #ifndef NDEBUG

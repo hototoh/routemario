@@ -267,12 +267,14 @@ arp_request_process(struct rte_mbuf* buf, struct arp_hdr* arphdr)
     RTE_LOG(ERR, ARP,  "No macaddr registered.\n");
     goto out;
   }
-
+  
+  /*
   int res = add_arp_table_entry(arp_tb, &body->arp_sip, &body->arp_sha);
   if (res) {
     RTE_LOG(ERR, ARP, "No more space for arp table: Drop ARP request.\n");
     goto out;
   }
+  */
 
   uint32_t tmp_ip = body->arp_tip;
   body->arp_tip = body->arp_sip;

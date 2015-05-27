@@ -105,22 +105,19 @@ static unsigned int rmario_rx_queue_per_lcore = RTE_MAX_ETHPORTS;
 /* default period is 10 seconds */
 static int64_t timer_period = 10 * TIMER_MILLISECOND * 1000; 
 
-char host_names[10][4] = {"peach",
-                          "mario",
-                          "yoshi", 
-                          "luigi"};
+char* host_names[4] = {"peach", "mario", "yoshi", "luigi"};
 
 void
-show_unit(double bps, char *unit)
+show_unit(double val, char *unit)
 {
-  if(1000*1000*1000 < bps){
-    printf("%f G%s", doublebps/1000/1000/1000, unit);
-  }else if(1000*1000 < bps){
-    printf("%f M%s", doublebps/1000/1000, unit);
-  }else if(1000 < bps){
-    printf("%f K%s", doublebps/1000, unit);
+  if(1000*1000*1000 < val){
+    printf("%f G%s", val/1000/1000/1000, unit);
+  }else if(1000*1000 < val){
+    printf("%f M%s", val/1000/1000, unit);
+  }else if(1000 < val){
+    printf("%f K%s", val/1000, unit);
   }else{
-    printf("%lu %s", bps, unit);
+    printf("%lu %s", val, unit);
   }
 }
 
@@ -143,14 +140,6 @@ print_stats()
       continue;
     }
    
-    printf("ipackets:%lu ", stats.ipackets);
-    printf("opackets:%lu ", stats.opackets);
-    printf("ibytes:%lu ", stats.ibytes);
-    printf("obytes:%lu ", stats.obytes);
-    printf("\n");
-
-    show_unit((stats.ibytes-ibytes_old[i])/10.0);
-    printf("\t");
     show_unit((double)stats.ipackets /10.0, "pps");
     printf("\t");
     show_unit((double)stats.opackets /10.0, "pps");
@@ -177,7 +166,6 @@ rmario_main_process(void)
   RTE_LOG(INFO, MARIO, "[%u] Main loop start.\n",lcore_id);
 	prev_tsc = 0;
 	timer_tsc = 0;
-  stats_tsc = 0;
   while(1) {
     cur_tsc = rte_rdtsc();
     
@@ -226,7 +214,6 @@ static int
 rmario_launch_one_lcore(void * unused)
 {
 	// RTE_LOG(INFO, MARIO, "[%u] Processing launch\n", rte_lcore_id());
-  rte_eth_stats_reset(i);
   set_nic_queue_id(rte_lcore_id());
   struct mbuf_queue *q = create_mbuf_queue(MAX_ROUTING_TX);
   if (q == NULL) {
@@ -242,6 +229,7 @@ rmario_launch_one_lcore(void * unused)
     return EXIT_FAILURE;
   }
   set_eth_tx_Qs(qs);
+  rte_eth_stats_reset(_mid);
   
   rmario_main_process();  
 	return 0;

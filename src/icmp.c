@@ -93,10 +93,12 @@ icmp_proc_echo_reply(struct rte_mbuf *buf, struct icmp_hdr *icmphdr)
   struct ipv4_hdr *iphdr;
   iphdr = (struct ipv4_hdr*) (rte_pktmbuf_mtod(buf, char*) + buf->l2_len);
   uint32_t s_addr = iphdr->src_addr;
+#ifndef NDEBUG  
   RTE_LOG(INFO, ICMP, "get icmp reply packet from %u.%u.%u.%u\n",
           (s_addr >> 24) & 0xff, (s_addr >> 16) & 0xff,
           (s_addr >> 8) & 0xff, s_addr & 0xff);
   rte_pktmbuf_free(buf);
+#endif
 }
 
 static void
@@ -105,9 +107,11 @@ icmp_proc_time_exceeded(struct rte_mbuf *buf, struct icmp_hdr *icmphdr)
   struct ipv4_hdr *iphdr;
   iphdr = (struct ipv4_hdr*) (rte_pktmbuf_mtod(buf, char*) + buf->l2_len);
   uint32_t s_addr = iphdr->src_addr;
+#ifndef NDEBUG  
   RTE_LOG(INFO, ICMP, "get icmp time exceeded packet from %u.%u.%u.%u\n",
           (s_addr >> 24) & 0xff, (s_addr >> 16) & 0xff,
           (s_addr >> 8) & 0xff, s_addr & 0xff);
+#endif
   rte_pktmbuf_free(buf);
 }
 
@@ -122,7 +126,9 @@ icmp_rcv(struct rte_mbuf *buf)
   uint32_t data_len = (uint32_t) (ntohs(iphdr->total_length) - buf->l3_len);
   uint16_t res = calc_checksum((uint16_t *)icmphdr, data_len);
   if (res) {
+#ifndef NDEBUG  
     RTE_LOG(DEBUG, ICMP, "checksum error\n");
+#endif
     goto out;
   }
 

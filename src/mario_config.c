@@ -146,10 +146,3 @@ load_config(char* path) {
 
   return 0;
 }
-
-/* int main() { */
-/*   char path[] = "./test_len.conf"; */
-/*   load_config(path); */
-/*   return 0; */
-/* } */
-  

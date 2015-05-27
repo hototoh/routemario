@@ -20,6 +20,7 @@
 
 #include "util.h"
 #include "interfaces.h"
+#include "global_mario.h"
 
 #define RTE_LOGTYPE_L3IF RTE_LOGTYPE_USER1
 
@@ -94,7 +95,7 @@ is_own_subnet(struct l3_interfaces *l3ifs, uint32_t addr)
   for(uint16_t i = 0; i < len; i++) {
     struct l3_interface *l3if = &l3_list[i];
     if (l3if == NULL) continue;
-    /*
+#ifndef NDEBUG
       {
         uint32_t s = l3if->ip_addr;
         uint32_t d = addr;
@@ -113,8 +114,7 @@ is_own_subnet(struct l3_interfaces *l3ifs, uint32_t addr)
                 (x >> 24)&0xff,(x >> 16)&0xff,(x >> 8)&0xff,x&0xff,
                 (r >> 24)&0xff,(r>> 16)&0xff,(r >> 8)&0xff,r&0xff);
       }
-    */
-
+#endif
     if(!((l3if->ip_addr ^ addr) & l3if->ip_mask)) {
       return l3if->port_id;
     }

@@ -2,7 +2,6 @@
  * Hiroshi Tokaku <tkk@hongo.wide.ad.jp>
  **/
 
-#define NDEBUG
 #include <stdio.h>
 #include <stdint.h>
 #include <stdbool.h>
@@ -422,9 +421,6 @@ main(int argc, char **argv)
             rmario_ports_eth_addr[port_id].addr_bytes[3],
             rmario_ports_eth_addr[port_id].addr_bytes[4],
             rmario_ports_eth_addr[port_id].addr_bytes[5]);
-#ifdef PORT_STATS
-    memset(&port_statistics, 0, sizeof(port_statistics));
-#endif
   }
 
 	check_all_ports_link_status(n_ports);
@@ -451,6 +447,10 @@ main(int argc, char **argv)
                                      RTE_ETH_FILTER_FLEXIBLE,
                                      RTE_ETH_FILTER_ADD,
                                      &filter);
+      if (ret < 0) {
+        RTE_LOG(CRIT, MARIO, "can't set filter\n");
+        return 1;
+      }
     }
   }
 

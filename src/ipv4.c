@@ -49,7 +49,6 @@ RTE_DEFINE_PER_LCORE(struct mbuf_queue*, routing_queue);
 static int
 ip_routing(struct mbuf_queue* rqueue)
 {
-  RTE_LOG(DEBUG, IPV4, "[%u] %s [%u] %s\n", rte_lcore_id(), __FILE__, __LINE__, __func__);
   struct rte_mbuf **queue = rqueue->queue;
   uint16_t len = rqueue->len;
   for (uint16_t i = 0; i < len; i++) {
@@ -62,7 +61,9 @@ ip_routing(struct mbuf_queue* rqueue)
     uint32_t dst = ntohl(iphdr->dst_addr);
     int res = rte_lpm_lookup(rib, dst, &next_index);
     if(res != 0) {
+#ifndef NDEBUG
       RTE_LOG(DEBUG, IPV4, "not matched lpm lookup\n");
+#endif
       rte_pktmbuf_free(buf);
       continue;
     }
@@ -86,7 +87,9 @@ ip_routing(struct mbuf_queue* rqueue)
 int
 ip_enqueue_routing_pkt(struct mbuf_queue* rqueue, struct rte_mbuf* buf)
 {
+#ifndef NDEBUG
   RTE_LOG(DEBUG, IPV4, "[%u] %s [%u] %s\n", rte_lcore_id(), __FILE__, __LINE__, __func__);
+#endif
   struct ipv4_hdr *iphdr;
   iphdr = (struct ipv4_hdr*) (rte_pktmbuf_mtod(buf, char *) + buf->l2_len);
   rqueue->queue[(rqueue->len)++] = buf;  
@@ -96,7 +99,9 @@ ip_enqueue_routing_pkt(struct mbuf_queue* rqueue, struct rte_mbuf* buf)
 void
 ip_enqueue_pkt(struct mbuf_queue* rqueue, struct rte_mbuf* buf)
 {
+#ifndef NDEBUG
   RTE_LOG(DEBUG, IPV4, "[%u] %s [%u] %s\n", rte_lcore_id(), __FILE__, __LINE__, __func__);
+#endif
   struct ipv4_hdr *iphdr;
   iphdr = (struct ipv4_hdr*) (rte_pktmbuf_mtod(buf, char*) + buf->l2_len);
 
@@ -128,6 +133,7 @@ ip_rcv(struct rte_mbuf **bufs, uint16_t n_rx)
     buf->l3_len = (iphdr->version_ihl & IPV4_HDR_IHL_MASK) << 2;    
     
     /* packets to this host. */
+#ifndef NDEBUG
     {
       uint32_t d = ntohl(iphdr->dst_addr);
       uint32_t s = ntohl(iphdr->src_addr);
@@ -135,11 +141,10 @@ ip_rcv(struct rte_mbuf **bufs, uint16_t n_rx)
               (s >> 24)&0xff,(s >> 16)&0xff,(s >> 8)&0xff,s&0xff,
               (d >> 24)&0xff,(d>> 16)&0xff,(d >> 8)&0xff,d&0xff);
     }
-    
+#endif    
     /* ignore braodcast */
     ndst = ntohl(iphdr->dst_addr);
     if (IPV4_BROADCAST <= ndst) {
-      RTE_LOG(DEBUG, IPV4, "ignore broadcast.");
       rte_pktmbuf_free(buf);
       continue;
     }
@@ -160,7 +165,9 @@ ip_rcv(struct rte_mbuf **bufs, uint16_t n_rx)
         }
         case IPPROTO_TCP: 
         case IPPROTO_UDP: 
+#ifndef NDEBUG
           RTE_LOG(DEBUG, IPV4, "[%u] %s %u %s to this router so drop\n", rte_lcore_id(), __FILE__, __LINE__, __func__);
+#endif
           ;
       }
       rte_pktmbuf_free(buf);
@@ -169,8 +176,10 @@ ip_rcv(struct rte_mbuf **bufs, uint16_t n_rx)
 
     /* packets to other hosts. */
     /* check the TTL */ 
-    if((--(iphdr>time_to_live)) <= 0) {
+    if((--(iphdr->time_to_live)) <= 0) {
+#ifndef NDEBUG
       RTE_LOG(DEBUG, IPV4, "TTL exceeded\n");
+#endif
       icmp_send_time_exceeded(buf, ndst);
       continue;
     }
@@ -181,10 +190,14 @@ ip_rcv(struct rte_mbuf **bufs, uint16_t n_rx)
       iphdr->hdr_checksum = 0;
       iphdr->hdr_checksum = rte_ipv4_cksum(iphdr);
       if(!rewrite_mac_addr(buf, dst_port, iphdr->dst_addr)) {
+#ifndef NDEBUG
         RTE_LOG(DEBUG, IPV4, "[%u] %s %u %s forwarding\n", rte_lcore_id(), __FILE__, __LINE__, __func__);
+#endif
         eth_enqueue_tx_packet(buf, dst_port);
       }
+#ifndef NDEBUG
       RTE_LOG(DEBUG, IPV4, "[%u] %s %u %s forwarding fin\n", rte_lcore_id(), __FILE__, __LINE__, __func__);
+#endif
       continue;
     }
     assert(false);

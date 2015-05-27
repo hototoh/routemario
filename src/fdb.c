@@ -29,7 +29,7 @@
 #include <rte_hash.h>
 
 #include "fdb.h"
-#include "util.h"
+#include "bit_utils.h"
 
 #define mmalloc(x) rte_malloc("fdb", (x), 0)
 #define mfree(x) rte_free((x))

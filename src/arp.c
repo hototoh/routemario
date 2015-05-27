@@ -30,7 +30,7 @@
 #include <rte_malloc.h>
 #include <rte_spinlock.h>
 
-#include "util.h"
+#include "bit_utils.h"
 #include "interfaces.h"
 #include "arp.h"
 #include "global_mario.h"

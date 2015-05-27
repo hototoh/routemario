@@ -34,7 +34,7 @@
 #include <rte_lpm.h>
 #include <rte_per_lcore.h>
 
-#include "util.h"
+#include "bit_utils.h"
 #include "interfaces.h"
 #include "mbuf_queue.h"
 #include "arp.h"

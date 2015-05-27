@@ -18,7 +18,7 @@
 #include <rte_log.h>
 #include <rte_ethdev.h>
 
-#include "util.h"
+#include "bit_utils.h"
 #include "interfaces.h"
 #include "global_mario.h"
 

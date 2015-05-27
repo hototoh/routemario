@@ -58,6 +58,7 @@ create_arp_table(uint32_t _size)
   uint32_t seed = (uint32_t) rte_rand();
   uint32_t size = (uint32_t) POWERROUND(_size);
   size = size > RTE_HASH_ENTRIES_MAX? RTE_HASH_ENTRIES_MAX : size;
+  printf("HASH SIZE: %u\n", size);
 
   struct arp_table *table;
   table = (struct arp_table*) mmalloc(sizeof(struct arp_table) +
@@ -120,7 +121,7 @@ add_arp_table_entry(struct arp_table* table, const uint32_t *ip_addr,
     struct arp_table_entry *entry = &table->items[key];
     ether_addr_copy(addr, &entry->eth_addr);
     entry->ip_addr = *ip_addr;
-    entry->expire = ARP_TABLE_EXPIRE_TIME;
+    entry->expire = 0;
     return 0;
   }
 

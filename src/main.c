@@ -129,17 +129,25 @@ print_stats()
       
   printf("\t\tIN\tOUT\tIN\tOUT\n");
   for (uint8_t i = 0; i < n_ports; i++) {
+#ifdef DSHOW
     if (i == _mid)
       RTE_LOG(INFO, STATS, "EXTERNAL: ");
     else 
       RTE_LOG(INFO, STATS, "To %s: ", host_names[i]);
-
+#else
+    printf("%u:");
+#endif
     int ret = rte_eth_stats_get(i, &stats);
     if (ret)  {
+#ifdef DSHOW
       printf("\n");
+#else
+      printf(":::\n");
+#endif
       continue;
     }
    
+#ifdef DSHOW
     show_unit((double)stats.ipackets /10.0, "pps");
     printf("\t");
     show_unit((double)stats.opackets /10.0, "pps");
@@ -148,6 +156,14 @@ print_stats()
     printf("\t");
     show_unit((double)stats.obytes /10.0, "bps");
     printf("\n");
+#else
+    printf("%lu:%lu:%lu:%lu\n",
+           (double)stats.ipackets /10.0,
+           (double)stats.opackets /10.0,
+           (double)stats.ibytes /10.0,
+           (double)stats.obytes /10.0);
+
+#endif
 
     rte_eth_stats_reset(i);
   }

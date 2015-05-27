@@ -106,7 +106,8 @@ eth_random_enqueue_tx_pkt(struct rte_mbuf *buf, uint8_t dst_port)
     assert(false);
   }
 
-  uint8_t middle_node = forwarding_node_id(buf->hash.rss);
+  //uint8_t middle_node = forwarding_node_id(buf->hash.rss);
+  uint8_t middle_node = dst_port;  //forwarding_node_id(buf->hash.rss);
   ether_addr_copy(&eth->d_addr, &eth->s_addr);
   eth->d_addr.addr_bytes[0] = (uint8_t)(0xf + (dst_port << 4));
   {

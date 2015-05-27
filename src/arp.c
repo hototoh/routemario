@@ -112,8 +112,8 @@ add_arp_table_entry(struct arp_table* table, const uint32_t *ip_addr,
       uint32_t s = ntohl(*ip_addr);
       uint8_t *a = addr->addr_bytes;
       RTE_LOG(DEBUG, ARP, 
-              "%s %u.%u.%u.%u <=> %02x:%02x:%02x:%02x:%02x:%02x\n",
-              __func__,
+              "%s %d %u.%u.%u.%u <=> %02x:%02x:%02x:%02x:%02x:%02x\n",
+              __func__, key
               (s >> 24)&0xff,(s >> 16)&0xff,(s >> 8)&0xff,s&0xff,
               a[0], a[1], a[2], a[3], a[4], a[5]);
     }
@@ -165,7 +165,17 @@ remove_arp_table_entry(struct arp_table* table, const uint32_t *ip_addr)
 struct arp_table_entry*
 lookup_arp_table_entry(struct arp_table* table, const uint32_t *ip_addr)
 {
+  while(!rte_spinlock_trylock(&arp_tb_lock)) {
+    ;
+  }
   int32_t key = rte_hash_lookup(table->handler, (void*) ip_addr);
+  rte_spinlock_unlock(&arp_tb_lock);
+  {
+    uint32_t s = ntohl(*ip_addr);
+    RTE_LOG(DEBUG, ARP_TABLE, "[%u] %s [%u] %s %u.%u.%u.%u => %d\n",
+            rte_lcore_id(), __FILE__, __LINE__, __func__,
+            (s >> 24)&0xff,(s >> 16)&0xff,(s >> 8)&0xff,s&0xff, key);
+  }
   if (key >= 0) {
     struct arp_table_entry *entry = &table->items[key];
     RTE_LOG(DEBUG, ARP, "this must not false\n"); 

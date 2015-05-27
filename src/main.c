@@ -296,7 +296,7 @@ check_all_ports_link_status(uint8_t port_num)
 	}
 }
 
-#define FDB_SIZE 1 << 20
+#define FDB_SIZE (1 << 20)
 #define MBUF_DATA_SIZE (2048 + RTE_PKTMBUF_HEADROOM)
 
 int
@@ -352,7 +352,7 @@ main(int argc, char **argv)
     rte_exit(EXIT_FAILURE, "Fail to crate fdb table.\n");
   }
 
-  arp_tb = create_arp_table(1 << 20);
+  arp_tb = create_arp_table(FDB_SIZE);
   if (arp_tb == NULL) {
     rte_exit(EXIT_FAILURE, "Fail to crate arp table.\n");
   }

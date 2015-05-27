@@ -58,7 +58,7 @@ create_arp_table(uint32_t _size)
   rte_srand((unsigned) time (NULL));
   rte_spinlock_init(&arp_tb_lock);
   uint32_t seed = (uint32_t) rte_rand();
-  uint32_t size = (uint32_t) POWERROUND(_size);
+  uint32_t size = (uint32_t) POWERROUNDUP(_size);
   size = size > RTE_HASH_ENTRIES_MAX? RTE_HASH_ENTRIES_MAX : size;
 
   struct arp_table *table;

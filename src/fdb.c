@@ -43,7 +43,7 @@ create_fdb_table(uint32_t _size)
 {
   rte_srand((unsigned) time (NULL));
   uint32_t seed = (uint32_t) rte_rand();
-  uint32_t size = (uint32_t) POWERROUND(_size);
+  uint32_t size = (uint32_t) POWERROUNDUP(_size);
   size = size > RTE_HASH_ENTRIES_MAX? RTE_HASH_ENTRIES_MAX : size;
 
   struct fdb_table *table;

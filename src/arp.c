@@ -113,7 +113,7 @@ add_arp_table_entry(struct arp_table* table, const uint32_t *ip_addr,
       uint8_t *a = addr->addr_bytes;
       RTE_LOG(DEBUG, ARP, 
               "%s %d %u.%u.%u.%u <=> %02x:%02x:%02x:%02x:%02x:%02x\n",
-              __func__, key
+              __func__, key,
               (s >> 24)&0xff,(s >> 16)&0xff,(s >> 8)&0xff,s&0xff,
               a[0], a[1], a[2], a[3], a[4], a[5]);
     }

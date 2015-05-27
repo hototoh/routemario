@@ -106,7 +106,7 @@ add_arp_table_entry(struct arp_table* table, const uint32_t *ip_addr,
   while(!rte_spinlock_trylock(&arp_tb_lock)) {
     ;
   }
-  key = rte_hash_add_key(table->handler, (const void*)ip_addr);
+  key = rte_hash_add_key(table->handler, ip_addr);
   rte_spinlock_unlock(&arp_tb_lock);
   if (key >= 0) {
     {
@@ -140,36 +140,13 @@ add_arp_table_entry(struct arp_table* table, const uint32_t *ip_addr,
   return key;
 }
 
-int
-remove_arp_table_entry(struct arp_table* table, const uint32_t *ip_addr)
-{
-  int32_t key = rte_hash_del_key(table->handler, ip_addr);
-  if (key >= 0) {
-    struct arp_table_entry *entry = &table->items[key];
-    ether_addr_copy((struct ether_addr*) "000000", &entry->eth_addr);
-    entry->ip_addr = 0;
-    entry->expire = 0;
-    return 0;
-  }
-
-  switch (-key) {
-    case EINVAL:
-      RTE_LOG(WARNING, ARP_TABLE, "Invalid parameters.\n");
-      break;
-    case ENOENT:
-      RTE_LOG(WARNING, ARP_TABLE, "the key is not found.\n");
-      /* break through */
-  }
-  return key;
-}
-
 struct arp_table_entry*
 lookup_arp_table_entry(struct arp_table* table, const uint32_t *ip_addr)
 {
   while(!rte_spinlock_trylock(&arp_tb_lock)) {
     ;
   }
-  int32_t key = rte_hash_lookup(table->handler, (const void*) ip_addr);
+  int32_t key = rte_hash_lookup(table->handler, ip_addr);
   rte_spinlock_unlock(&arp_tb_lock);
   {
     uint32_t s = ntohl(*ip_addr);
@@ -193,6 +170,30 @@ lookup_arp_table_entry(struct arp_table* table, const uint32_t *ip_addr)
       /* break through */
   }
   return NULL;
+}
+
+
+int
+remove_arp_table_entry(struct arp_table* table, const uint32_t *ip_addr)
+{
+  int32_t key = rte_hash_del_key(table->handler, ip_addr);
+  if (key >= 0) {
+    struct arp_table_entry *entry = &table->items[key];
+    ether_addr_copy((struct ether_addr*) "000000", &entry->eth_addr);
+    entry->ip_addr = 0;
+    entry->expire = 0;
+    return 0;
+  }
+
+  switch (-key) {
+    case EINVAL:
+      RTE_LOG(WARNING, ARP_TABLE, "Invalid parameters.\n");
+      break;
+    case ENOENT:
+      RTE_LOG(WARNING, ARP_TABLE, "the key is not found.\n");
+      /* break through */
+  }
+  return key;
 }
 
 int

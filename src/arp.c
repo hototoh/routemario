@@ -169,6 +169,7 @@ lookup_arp_table_entry(struct arp_table* table, const uint32_t *ip_addr)
 #endif
       break;
     case ENOENT:
+        ;
 #ifndef NDEBUG
       RTE_LOG(WARNING, ARP_TABLE, "the key is not found.\n");
 #endif
@@ -197,6 +198,7 @@ remove_arp_table_entry(struct arp_table* table, const uint32_t *ip_addr)
 #endif
       break;
     case ENOENT:
+        ;
 #ifndef NDEBUG
       RTE_LOG(WARNING, ARP_TABLE, "the key is not found.\n");
 #endif

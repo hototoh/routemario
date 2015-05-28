@@ -53,7 +53,16 @@ rewrite_mac_addr(struct rte_mbuf *buf, uint8_t dst_port, uint32_t next_hop)
   entry = lookup_arp_table_entry(arp_tb, &next_hop);
   if ((entry == NULL) || (is_expired(entry))) {
     // XXX right ?
-    arp_send_request(buf, next_hop, dst_port);
+    //arp_send_request(buf, next_hop, dst_port);
+  /*{
+    uint32_t s = ntohl(next_hop);
+    RTE_LOG(DEBUG, ETH, "[%u] %s [%u] %s %u.%u.%u.%u\n", rte_lcore_id(), __FILE__, __LINE__, __func__,
+            (s >> 24)&0xff,(s >> 16)&0xff,(s >> 8)&0xff,s&0xff);
+    s = ntohl(iphdr->dst_addr);
+    RTE_LOG(DEBUG, ETH, "[%u] %s [%u] %s %u.%u.%u.%u\n", rte_lcore_id(), __FILE__, __LINE__, __func__,
+            (s >> 24)&0xff,(s >> 16)&0xff,(s >> 8)&0xff,s&0xff);
+  }*/
+    arp_send_request(buf, iphdr->dst_addr, dst_port);
     return 1;
   }
   ether_addr_copy(&entry->eth_addr, &eth->d_addr);
@@ -107,11 +116,12 @@ eth_random_enqueue_tx_pkt(struct rte_mbuf *buf, uint8_t dst_port)
     assert(false);
   }
 
-#ifdef DVLB
-  uint8_t middle_node = dst_port;
-#else
+#ifdef VLB
   uint8_t middle_node = forwarding_node_id(buf->hash.rss);
+#else
+  uint8_t middle_node = dst_port;
 #endif
+  middle_node = dst_port;
   ether_addr_copy(&eth->d_addr, &eth->s_addr);
   eth->d_addr.addr_bytes[0] = (uint8_t)(0xf + (dst_port << 4));
 #ifndef NDEBUG

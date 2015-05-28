@@ -164,11 +164,15 @@ lookup_arp_table_entry(struct arp_table* table, const uint32_t *ip_addr)
   }
   switch (-key) {
     case EINVAL:
+#ifndef NDEBUG
       RTE_LOG(WARNING, ARP_TABLE, "Invalid parameters.\n");
+#endif
       break;
     case ENOENT:
-      ;
+        ;
+#ifndef NDEBUG
       RTE_LOG(WARNING, ARP_TABLE, "the key is not found.\n");
+#endif
       /* break through */
   }
   return NULL;
@@ -189,10 +193,15 @@ remove_arp_table_entry(struct arp_table* table, const uint32_t *ip_addr)
 
   switch (-key) {
     case EINVAL:
+#ifndef NDEBUG
       RTE_LOG(WARNING, ARP_TABLE, "Invalid parameters.\n");
+#endif
       break;
     case ENOENT:
+        ;
+#ifndef NDEBUG
       RTE_LOG(WARNING, ARP_TABLE, "the key is not found.\n");
+#endif
       /* break through */
   }
   return key;
@@ -215,7 +224,9 @@ lookup_bulk_arp_table_entries(struct arp_table *table,
     return 0;
   }
   
+#ifndef NDEBUG
   RTE_LOG(ERR, ARP_TABLE, "error.\n");
+#endif
   return res;
 }
 
@@ -247,6 +258,7 @@ arp_send_request(struct rte_mbuf* buf, uint32_t tip, uint8_t port_id)
   eth->ether_type = htons(ETHER_TYPE_ARP);
   //buf->pkt_len = 46;  
   eth_enqueue_tx_packet(buf, port_id);
+  //__eth_enqueue_tx_pkt(buf, port_id);
   return;
 free:
   RTE_LOG(DEBUG, ARP, "l3 interface not found\n", __func__);  
@@ -263,13 +275,17 @@ arp_request_process(struct rte_mbuf* buf, struct arp_hdr* arphdr)
   
   struct ether_addr* port_mac = get_macaddr_with_port(intfs, port_id);;
   if (port_mac == NULL) {
+#ifndef NDEBUG
     RTE_LOG(ERR, ARP,  "No macaddr registered.\n");
+#endif
     goto out;
   }
   
   int res = add_arp_table_entry(arp_tb, &body->arp_sip, &body->arp_sha);
   if (res) {
+#ifndef NDEBUG
     RTE_LOG(ERR, ARP, "No more space for arp table: Drop ARP request.\n");
+#endif
     goto out;
   }
 
@@ -342,7 +358,9 @@ arp_reply_process(struct rte_mbuf* buf, struct arp_hdr* arphdr, bool internal)
 
   res = add_arp_table_entry(arp_tb, &body->arp_sip, &body->arp_sha);  
   if (res) {
+#ifndef NDEBUG
     RTE_LOG(WARNING, ARP, "fail to add arp entry\n");
+#endif
     return ;
   }
 

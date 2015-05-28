@@ -24,7 +24,7 @@
 #define ROUNDUP64(x) (((x) + 63ULL) & (~63ULL))
 #define POWERROUNDUP(x)                                    \
   ({                                                       \
-    int fls_bit = generic_flsll(x);                        \
+    int fls_bit = generic_flsl(x);                        \
     fls_bit = (1UL << fls_bit) < x ? fls_bit - 1: fls_bit; \
     1UL << fls_bit;                                        \
   })

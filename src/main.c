@@ -103,7 +103,8 @@ static unsigned int rmario_rx_queue_per_lcore = RTE_MAX_ETHPORTS;
 /* 1 day max */
 #define MAX_TIMER_PERIOD 86400 
 /* default period is 10 seconds */
-static int64_t timer_period = 10 * TIMER_MILLISECOND * 1000; 
+#define TIMER_PERIOD 5
+static int64_t timer_period = TIMER_PERIOD * TIMER_MILLISECOND * 1000; 
 
 char* host_names[4] = {"peach", "mario", "yoshi", "luigi"};
 
@@ -111,13 +112,13 @@ void
 show_unit(double val, char *unit)
 {
   if(1000*1000*1000 < val){
-    printf("%f G%s", val/1000/1000/1000, unit);
+    printf("%lf G%s", val/1000/1000/1000, unit);
   }else if(1000*1000 < val){
-    printf("%f M%s", val/1000/1000, unit);
+    printf("%lf M%s", val/1000/1000, unit);
   }else if(1000 < val){
-    printf("%f K%s", val/1000, unit);
+    printf("%lf K%s", val/1000, unit);
   }else{
-    printf("%lu %s", val, unit);
+    printf("%lf %s", val, unit);
   }
 }
 
@@ -127,7 +128,7 @@ print_stats()
   struct rte_eth_stats stats;
   uint8_t n_ports = rte_eth_dev_count();
       
-  printf("\t\tIN\tOUT\tIN\tOUT\n");
+  printf("\tIN\tOUT\tIN\tOUT\n");
   for (uint8_t i = 0; i < n_ports; i++) {
 #ifdef DSHOW
     if (i == _mid)
@@ -135,7 +136,7 @@ print_stats()
     else 
       RTE_LOG(INFO, STATS, "To %s: ", host_names[i]);
 #else
-    printf("%u:");
+    printf("%u: ", i);
 #endif
     int ret = rte_eth_stats_get(i, &stats);
     if (ret)  {
@@ -148,23 +149,22 @@ print_stats()
     }
    
 #ifdef DSHOW
-    show_unit((double)stats.ipackets /10.0, "pps");
+    show_unit((double)stats.ipackets /TIMER_PERIOD, "pps");
     printf("\t");
-    show_unit((double)stats.opackets /10.0, "pps");
+    show_unit((double)stats.opackets /TIMER_PERIOD, "pps");
     printf("\t");
-    show_unit((double)stats.ibytes /10.0, "bps");
+    show_unit((double)stats.ibytes*8.0 /TIMER_PERIOD, "bps");
     printf("\t");
-    show_unit((double)stats.obytes /10.0, "bps");
+    show_unit((double)stats.obytes*8.0 /TIMER_PERIOD, "bps");
     printf("\n");
 #else
     printf("%lu:%lu:%lu:%lu\n",
-           (double)stats.ipackets /10.0,
-           (double)stats.opackets /10.0,
-           (double)stats.ibytes /10.0,
-           (double)stats.obytes /10.0);
+           (double)stats.ipackets /TIMER_PERIOD,
+           (double)stats.opackets /TIMER_PERIOD,
+           (double)stats.ibytes*8.0 /TIMER_PERIOD,
+           (double)stats.obytes*8.0 /TIMER_PERIOD);
 
 #endif
-
     rte_eth_stats_reset(i);
   }
 }
@@ -245,7 +245,6 @@ rmario_launch_one_lcore(void * unused)
     return EXIT_FAILURE;
   }
   set_eth_tx_Qs(qs);
-  rte_eth_stats_reset(_mid);
   
   rmario_main_process();  
 	return 0;
@@ -536,6 +535,10 @@ main(int argc, char **argv)
         return 1;
       }
     }
+  }
+
+  for (uint8_t port_id = 0; port_id < n_ports; port_id++) {
+    rte_eth_stats_reset(port_id);
   }
 
 	/* launch per-lcore init on every lcore */

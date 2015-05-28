@@ -5,7 +5,6 @@
 
 #ifndef ROUTEMARIO_H
 #define ROUTEMARIO_H
-#define NDEBUG
 #include <rte_lpm.h>
 #include <rte_lcore.h>
 

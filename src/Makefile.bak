@@ -43,9 +43,11 @@ APP = routemario
 
 # all source are stored in SRCS-y
 SRCS-y := main.c arp.c eth.c fdb.c icmp.c interfaces.c ipv4.c mario_config.c mbuf_queue.c vlb.c
-CFLAGS += -O1
 CFLAGS += -std=c99
-CFLAGS += -DSHOW
+CFLAGS += -O1
+CFLAGS += -DNDEBUG
+CFLAGS += -DDSHOW
+#CFLAGS += -DVLB
 #CFLAGS += $(WERROR_FLAGS)
 
 include $(RTE_SDK)/mk/rte.extapp.mk

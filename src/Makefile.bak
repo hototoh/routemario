@@ -45,7 +45,7 @@ APP = routemario
 SRCS-y := main.c arp.c eth.c fdb.c icmp.c interfaces.c ipv4.c mario_config.c mbuf_queue.c vlb.c
 CFLAGS += -O1
 CFLAGS += -std=c99
-CFLAGS += -DSHOW
+CFLAGS += -DDSHOW
 CFLAGS += -DDVLB
 #CFLAGS += $(WERROR_FLAGS)
 

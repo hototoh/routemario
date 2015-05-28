@@ -111,13 +111,13 @@ void
 show_unit(double val, char *unit)
 {
   if(1000*1000*1000 < val){
-    printf("%f G%s", val/1000/1000/1000, unit);
+    printf("%lf G%s", val/1000/1000/1000, unit);
   }else if(1000*1000 < val){
-    printf("%f M%s", val/1000/1000, unit);
+    printf("%lf M%s", val/1000/1000, unit);
   }else if(1000 < val){
-    printf("%f K%s", val/1000, unit);
+    printf("%lf K%s", val/1000, unit);
   }else{
-    printf("%lu %s", val, unit);
+    printf("%lf %s", val, unit);
   }
 }
 
@@ -127,7 +127,7 @@ print_stats()
   struct rte_eth_stats stats;
   uint8_t n_ports = rte_eth_dev_count();
       
-  printf("\t\tIN\tOUT\tIN\tOUT\n");
+  printf("\tIN\tOUT\tIN\tOUT\n");
   for (uint8_t i = 0; i < n_ports; i++) {
 #ifdef DSHOW
     if (i == _mid)
@@ -164,7 +164,6 @@ print_stats()
            (double)stats.obytes /10.0);
 
 #endif
-
     rte_eth_stats_reset(i);
   }
 }

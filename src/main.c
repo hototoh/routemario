@@ -135,7 +135,7 @@ print_stats()
     else 
       RTE_LOG(INFO, STATS, "To %s: ", host_names[i]);
 #else
-    printf("%u", i);
+    printf("%u: ", i);
 #endif
     int ret = rte_eth_stats_get(i, &stats);
     if (ret)  {

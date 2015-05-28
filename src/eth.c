@@ -52,7 +52,8 @@ rewrite_mac_addr(struct rte_mbuf *buf, uint8_t dst_port, uint32_t next_hop)
   iphdr = (struct ipv4_hdr*) (rte_pktmbuf_mtod(buf, char *) + buf->l2_len);
   entry = lookup_arp_table_entry(arp_tb, &next_hop);
   if ((entry == NULL) || (is_expired(entry))) {
-    arp_send_request(buf, iphdr->dst_addr, dst_port);
+    // XXX right ?
+    arp_send_request(buf, next_hop, dst_port);
     return 1;
   }
   ether_addr_copy(&entry->eth_addr, &eth->d_addr);
@@ -106,8 +107,11 @@ eth_random_enqueue_tx_pkt(struct rte_mbuf *buf, uint8_t dst_port)
     assert(false);
   }
 
-  //uint8_t middle_node = forwarding_node_id(buf->hash.rss);
-  uint8_t middle_node = dst_port;  //forwarding_node_id(buf->hash.rss);
+#ifdef DVLB
+  uint8_t middle_node = dst_port;
+#else
+  uint8_t middle_node = forwarding_node_id(buf->hash.rss);
+#endif
   ether_addr_copy(&eth->d_addr, &eth->s_addr);
   eth->d_addr.addr_bytes[0] = (uint8_t)(0xf + (dst_port << 4));
 #ifndef NDEBUG
@@ -214,11 +218,12 @@ eth_input(struct rte_mbuf** bufs, uint16_t n_rx, uint8_t src_port)
 void
 eth_internal_input(struct rte_mbuf** bufs, uint16_t n_rx, uint8_t src_port)
 {
-  uint8_t dst_port = get_nic_queue_id();
 #ifndef NDEBUG
-  RTE_LOG(DEBUG, ETH, "%s [%u] [Core-%u][Port-%u][Q#%u] %s\n",
-          __FILE__, __LINE__, rte_lcore_id(), src_port, dst_port, __func__);
+  RTE_LOG(DEBUG, ETH, "[Core-%u][Q#%u][Port-%u] %s\n",
+          rte_lcore_id(), get_nic_queue_id(), src_port,  __func__);
 #endif
+
+  uint8_t dst_port = get_nic_queue_id();
   struct ether_addr mac;
   rte_eth_macaddr_get(dst_port, &mac);
   for(uint32_t i = 0; i < n_rx; i++) {

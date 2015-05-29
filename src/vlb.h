@@ -8,6 +8,6 @@ struct vlb_info {
   uint64_t expire;
 };
 
+void init_vlb_seed();
 uint8_t forwarding_node_id(uint32_t rss);
-
 #endif

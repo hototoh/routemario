@@ -41,15 +41,7 @@
 #define RTE_LOGTYPE_ARP_TABLE RTE_LOGTYPE_USER1
 #define RTE_LOGTYPE_ARP RTE_LOGTYPE_USER2
 
-//#define rte_pktmbuf_free(__VA_ARGS__) 
-
-//#ifndef RTE_LOG
-//#undef RTE_LOG 
-//#endif
-//#define RTE_LOG(...) (0);
-
 struct arp_table *arp_tb;
-//struct rte_spinlock_t arp_tb_lock;
 rte_spinlock_t arp_tb_lock;
 
 struct arp_table*
@@ -60,14 +52,17 @@ create_arp_table(uint32_t _size)
   uint32_t seed = (uint32_t) rte_rand();
   uint32_t size = (uint32_t) POWERROUNDUP(_size);
   size = size > RTE_HASH_ENTRIES_MAX? RTE_HASH_ENTRIES_MAX : size;
+  size_t msize = sizeof(struct arp_table) + 
+                 sizeof(struct arp_table_entry) * size;
 
   struct arp_table *table;
-  table = (struct arp_table*) mmalloc(sizeof(struct arp_table) +
-                                      sizeof(struct arp_table_entry) * size);
+  table = (struct arp_table*) mmalloc(msize);
+                                      
   if (table == NULL) {
     RTE_LOG( ERR, ARP_TABLE, "cannot allocate memory for table.\n");
     goto out;
   }
+  memset(table, 0, msize);
   
   struct rte_hash_parameters params = {
     .name = "arp_table",
@@ -104,11 +99,9 @@ add_arp_table_entry(struct arp_table* table, const uint32_t *ip_addr,
                     const struct ether_addr* addr)
 {
   int32_t key;
-  while(!rte_spinlock_trylock(&arp_tb_lock)) {
-    ;
-  }
+  //while(!rte_spinlock_trylock(&arp_tb_lock)) { ; }
   key = rte_hash_add_key(table->handler, ip_addr);
-  rte_spinlock_unlock(&arp_tb_lock);
+  //rte_spinlock_unlock(&arp_tb_lock);
   if (key >= 0) {
 #ifndef NDEBUG
     {
@@ -142,19 +135,38 @@ add_arp_table_entry(struct arp_table* table, const uint32_t *ip_addr,
   return key;
 }
 
+void
+dump_arp_table(struct arp_table* table)
+{
+  uint32_t len = table->handler->entries;
+  for (uint32_t i = 0; i < len; i++) {
+    struct arp_table_entry *entry = &table->items[i];
+    if ((entry->vlan_id || entry->ip_addr ||
+          entry->expire || !is_zero_ether_addr(&entry->eth_addr))) {
+      {
+        uint32_t s = ntohl(entry->ip_addr);
+        uint8_t *a = entry->eth_addr.addr_bytes;
+        RTE_LOG(DEBUG, ARP_TABLE, 
+                "\t%02u.%02u.%02u.%02u <=> %02x:%02x:%02x:%02x:%02x:%02x\n",
+                (s >> 24)&0xff,(s >> 16)&0xff,(s >> 8)&0xff,s&0xff,
+                a[0], a[1], a[2], a[3], a[4], a[5]);
+      }
+    }
+  }
+  printf("\n");
+}
+
 struct arp_table_entry*
 lookup_arp_table_entry(struct arp_table* table, const uint32_t *ip_addr)
 {
-  while(!rte_spinlock_trylock(&arp_tb_lock)) {
-    ;
-  }
+  //while(!rte_spinlock_trylock(&arp_tb_lock)) { ; }
   int32_t key = rte_hash_lookup(table->handler, ip_addr);
-  rte_spinlock_unlock(&arp_tb_lock);
+  //rte_spinlock_unlock(&arp_tb_lock);
 #ifndef NDEBUG
   {
     uint32_t s = ntohl(*ip_addr);
-    RTE_LOG(DEBUG, ARP_TABLE, "[%u] %s [%u] %s %u.%u.%u.%u => %d\n",
-            rte_lcore_id(), __FILE__, __LINE__, __func__,
+    RTE_LOG(DEBUG, ARP_TABLE, "[%u] %s %u.%u.%u.%u => %d\n",
+            rte_lcore_id(), __func__,
             (s >> 24)&0xff,(s >> 16)&0xff,(s >> 8)&0xff,s&0xff, key);
   }
 #endif
@@ -171,7 +183,7 @@ lookup_arp_table_entry(struct arp_table* table, const uint32_t *ip_addr)
     case ENOENT:
         ;
 #ifndef NDEBUG
-      RTE_LOG(WARNING, ARP_TABLE, "the key is not found.\n");
+      //RTE_LOG(WARNING, ARP_TABLE, "the key is not found.\n");
 #endif
       /* break through */
   }
@@ -281,13 +293,13 @@ arp_request_process(struct rte_mbuf* buf, struct arp_hdr* arphdr)
     goto out;
   }
   
-  int res = add_arp_table_entry(arp_tb, &body->arp_sip, &body->arp_sha);
-  if (res) {
-#ifndef NDEBUG
-    RTE_LOG(ERR, ARP, "No more space for arp table: Drop ARP request.\n");
-#endif
-    goto out;
-  }
+//  int res = add_arp_table_entry(arp_tb, &body->arp_sip, &body->arp_sha);
+//  if (res) {
+//#ifndef NDEBUG
+//    RTE_LOG(ERR, ARP, "No more space for arp table: Drop ARP request.\n");
+//#endif
+//    goto out;
+//  }
 
   uint32_t tmp_ip = body->arp_tip;
   body->arp_tip = body->arp_sip;
@@ -311,15 +323,22 @@ arp_request_process(struct rte_mbuf* buf, struct arp_hdr* arphdr)
       uint32_t sip = ntohl(body->arp_sip);
       uint32_t dip = ntohl(body->arp_tip);
       RTE_LOG(DEBUG, ARP, 
-              "[%u] Port %u => %u\t%s %u \n"
-              "ARP src %02x:%02x:%02x:%02x:%02x:%02x => target %02x:%02x:%02x:%02x:%02x:%02x\n"
-              "MAC src %02x:%02x:%02x:%02x:%02x:%02x => target %02x:%02x:%02x:%02x:%02x:%02x\n"
-              "IP  %u.%u.%u.%u -> %u.%u.%u.%u\n",
-              rte_lcore_id(), buf->port, buf->port, __func__, __LINE__,
-              a[0], a[1], a[2], a[3], a[4], a[5], b[0], b[1], b[2], b[3], b[4], b[5], 
-              c[0], c[1], c[2], c[3], c[4], c[5], d[0], d[1], d[2], d[3], d[4], d[5],
+              "[%u] %s Port %u => %u\t " "IP  %u.%u.%u.%u -> %u.%u.%u.%u " "ARP src %02x:%02x:%02x:%02x:%02x:%02x => target %02x:%02x:%02x:%02x:%02x:%02x " "MAC src %02x:%02x:%02x:%02x:%02x:%02x => target %02x:%02x:%02x:%02x:%02x:%02x\n" ,
+              rte_lcore_id(), __func__, buf->port, buf->port, 
               (sip >> 24)&0xff,(sip >> 16)&0xff,(sip >> 8)&0xff, sip&0xff,
-              (dip >> 24)&0xff,(dip >> 16)&0xff,(dip >> 8)&0xff, dip&0xff);
+              (dip >> 24)&0xff,(dip >> 16)&0xff,(dip >> 8)&0xff, dip&0xff,
+              a[0], a[1], a[2], a[3], a[4], a[5], b[0], b[1], b[2], b[3], b[4], b[5], 
+              c[0], c[1], c[2], c[3], c[4], c[5], d[0], d[1], d[2], d[3], d[4], d[5]);
+      //RTE_LOG(DEBUG, ARP, 
+      //        "[%u] Port %u => %u\t%s %u \n"
+      //        "ARP src %02x:%02x:%02x:%02x:%02x:%02x => target %02x:%02x:%02x:%02x:%02x:%02x\n"
+      //        "MAC src %02x:%02x:%02x:%02x:%02x:%02x => target %02x:%02x:%02x:%02x:%02x:%02x\n"
+      //        "IP  %u.%u.%u.%u -> %u.%u.%u.%u\n",
+      //        rte_lcore_id(), buf->port, buf->port, __func__, __LINE__,
+      //        a[0], a[1], a[2], a[3], a[4], a[5], b[0], b[1], b[2], b[3], b[4], b[5], 
+      //        c[0], c[1], c[2], c[3], c[4], c[5], d[0], d[1], d[2], d[3], d[4], d[5],
+      //        (sip >> 24)&0xff,(sip >> 16)&0xff,(sip >> 8)&0xff, sip&0xff,
+      //        (dip >> 24)&0xff,(dip >> 16)&0xff,(dip >> 8)&0xff, dip&0xff);
     }
 #endif
   __eth_enqueue_tx_pkt(buf, buf->port);
@@ -342,43 +361,43 @@ arp_reply_process(struct rte_mbuf* buf, struct arp_hdr* arphdr, bool internal)
       uint32_t sip = ntohl(body->arp_sip);
       uint32_t dip = ntohl(body->arp_tip);
       RTE_LOG(DEBUG, ARP, 
-              "[%u] Port  %u  => \t%s %u \n"
-              "ARP src %02x:%02x:%02x:%02x:%02x:%02x => target %02x:%02x:%02x:%02x:%02x:%02x\n"
-              "MAC src %02x:%02x:%02x:%02x:%02x:%02x => target %02x:%02x:%02x:%02x:%02x:%02x\n"
-              "IP  %u.%u.%u.%u -> %u.%u.%u.%u\n",
-              rte_lcore_id(), buf->port, __func__, __LINE__,
-              a[0], a[1], a[2], a[3], a[4], a[5], b[0], b[1], b[2], b[3], b[4], b[5], 
-              c[0], c[1], c[2], c[3], c[4], c[5], d[0], d[1], d[2], d[3], d[4], d[5],
+              "[%u] %s Port %u => <R> \t" "IP  %u.%u.%u.%u -> %u.%u.%u.%u " "ARP src %02x:%02x:%02x:%02x:%02x:%02x => target %02x:%02x:%02x:%02x:%02x:%02x " "MAC src %02x:%02x:%02x:%02x:%02x:%02x => target %02x:%02x:%02x:%02x:%02x:%02x\n" ,
+              rte_lcore_id(), __func__, buf->port, 
               (sip >> 24)&0xff,(sip >> 16)&0xff,(sip >> 8)&0xff,sip&0xff,
-              (dip >> 24)&0xff,(dip>> 16)&0xff,(dip >> 8)&0xff,dip&0xff);
+              (dip >> 24)&0xff,(dip>> 16)&0xff,(dip >> 8)&0xff,dip&0xff,
+              a[0], a[1], a[2], a[3], a[4], a[5], b[0], b[1], b[2], b[3], b[4], b[5], 
+              c[0], c[1], c[2], c[3], c[4], c[5], d[0], d[1], d[2], d[3], d[4], d[5]);
     }
 #endif
+
   int res = 0;
   struct arp_ipv4 *body = &arphdr->arp_data;
-
   res = add_arp_table_entry(arp_tb, &body->arp_sip, &body->arp_sha);  
   if (res) {
 #ifndef NDEBUG
     RTE_LOG(WARNING, ARP, "fail to add arp entry\n");
 #endif
-    return ;
+    goto out;
   }
 
-  if (internal) return ;
+  if (internal) goto out;
 
   // broadcast to all the other nodes
   uint8_t port_num = rte_eth_dev_count();
   for (uint8_t port_id = 0, i = 0; port_id < port_num; port_id++) {
-    //RTE_LOG(DEBUG, ARP, "%s broadcast arp entry\n", __func__);
+    //RTE_LOG(DEBUG, ARP, "%s broadcast arp entry %u => %u\n", __func__, buf->port, port_id);
     if (port_id == buf->port) continue;
     
     struct rte_mbuf* _buf = buf;
     if(++i != (port_num - 1))
       _buf = rte_pktmbuf_clone(buf, rmario_pktmbuf_pool);
     
-    //RTE_LOG(DEBUG, ARP, "%s broadcast arp entry %u => %u\n", __func__, buf->port, port_id);
     __eth_enqueue_tx_pkt(buf, port_id);
   }
+  return;
+out:
+  rte_pktmbuf_free(buf);    
+  return ;
 }
 
 void
@@ -412,9 +431,6 @@ arp_internal_request_process(struct rte_mbuf* buf, struct arp_hdr* arphdr)
 {
   uint8_t dst_port = get_nic_queue_id();
   if(dst_port == _mid) {
-#ifndef NDEBUG
-    RTE_LOG(DEBUG, ARP, "[%u]%s to external\n", rte_lcore_id(), __func__);
-#endif
     struct ether_addr mac;
     rte_eth_macaddr_get(dst_port, &mac);
 
@@ -427,26 +443,23 @@ arp_internal_request_process(struct rte_mbuf* buf, struct arp_hdr* arphdr)
   } 
   
 #ifndef NDEBUG
-    {
-      struct ether_hdr *eth = rte_pktmbuf_mtod(buf, struct ether_hdr *);
-      struct arp_ipv4 *body = &arphdr->arp_data;
-      uint8_t *a = (body->arp_sha).addr_bytes;
-      uint8_t *b = (body->arp_tha).addr_bytes;
-      uint8_t *c = (eth->s_addr).addr_bytes;
-      uint8_t *d = (eth->d_addr).addr_bytes;
-      uint32_t sip = ntohl(body->arp_sip);
-      uint32_t dip = ntohl(body->arp_tip);
-      RTE_LOG(DEBUG, ARP, 
-              "[%u] Port %u => %u\t%s %u \n"
-              "ARP src %02x:%02x:%02x:%02x:%02x:%02x => target %02x:%02x:%02x:%02x:%02x:%02x\n"
-              "MAC src %02x:%02x:%02x:%02x:%02x:%02x => target %02x:%02x:%02x:%02x:%02x:%02x\n"
-              "IP  %u.%u.%u.%u -> %u.%u.%u.%u\n",
-              rte_lcore_id(), buf->port, dst_port, __func__, __LINE__,
-              a[0], a[1], a[2], a[3], a[4], a[5], b[0], b[1], b[2], b[3], b[4], b[5], 
-              c[0], c[1], c[2], c[3], c[4], c[5], d[0], d[1], d[2], d[3], d[4], d[5],
-              (sip >> 24)&0xff,(sip >> 16)&0xff,(sip >> 8)&0xff,sip&0xff,
-              (dip >> 24)&0xff,(dip>> 16)&0xff,(dip >> 8)&0xff,dip&0xff);
-    }
+  {
+    struct ether_hdr *eth = rte_pktmbuf_mtod(buf, struct ether_hdr *);
+    struct arp_ipv4 *body = &arphdr->arp_data;
+    uint8_t *a = (body->arp_sha).addr_bytes;
+    uint8_t *b = (body->arp_tha).addr_bytes;
+    uint8_t *c = (eth->s_addr).addr_bytes;
+    uint8_t *d = (eth->d_addr).addr_bytes;
+    uint32_t sip = ntohl(body->arp_sip);
+    uint32_t dip = ntohl(body->arp_tip);
+    RTE_LOG(DEBUG, ARP, 
+            "[%u] %s Port %u => %u\t " "IP  %u.%u.%u.%u -> %u.%u.%u.%u " "ARP src %02x:%02x:%02x:%02x:%02x:%02x => target %02x:%02x:%02x:%02x:%02x:%02x " "MAC src %02x:%02x:%02x:%02x:%02x:%02x => target %02x:%02x:%02x:%02x:%02x:%02x\n",
+            rte_lcore_id(), __func__, buf->port, dst_port,
+            (sip >> 24)&0xff,(sip >> 16)&0xff,(sip >> 8)&0xff,sip&0xff,
+            (dip >> 24)&0xff,(dip>> 16)&0xff,(dip >> 8)&0xff,dip&0xff, 
+            a[0], a[1], a[2], a[3], a[4], a[5], b[0], b[1], b[2], b[3], b[4], b[5], 
+            c[0], c[1], c[2], c[3], c[4], c[5], d[0], d[1], d[2], d[3], d[4], d[5]);
+  }
 #endif
   __eth_enqueue_tx_pkt(buf, dst_port); 
 }

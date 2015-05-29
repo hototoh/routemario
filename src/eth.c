@@ -33,8 +33,10 @@ RTE_DEFINE_PER_LCORE(uint16_t, nic_queue_id);
 int
 rewrite_mac_addr(struct rte_mbuf *buf, uint8_t dst_port, uint32_t next_hop)
 {
-  if(dst_port < 0) 
+  if(dst_port < 0) {
     rte_pktmbuf_free(buf);
+    return 1;
+  }
 
   struct ether_addr mac;
   rte_eth_macaddr_get(dst_port, &mac);
@@ -52,17 +54,19 @@ rewrite_mac_addr(struct rte_mbuf *buf, uint8_t dst_port, uint32_t next_hop)
   iphdr = (struct ipv4_hdr*) (rte_pktmbuf_mtod(buf, char *) + buf->l2_len);
   entry = lookup_arp_table_entry(arp_tb, &next_hop);
   if ((entry == NULL) || (is_expired(entry))) {
+#ifndef NDEBUG
+    {
+      uint32_t s = ntohl(next_hop);
+      RTE_LOG(DEBUG, ETH, "[%u] %s [%u] %s %u.%u.%u.%u\n", rte_lcore_id(), __FILE__, __LINE__, __func__,
+      (s >> 24)&0xff,(s >> 16)&0xff,(s >> 8)&0xff,s&0xff);
+      s = ntohl(iphdr->dst_addr);
+      RTE_LOG(DEBUG, ETH, "[%u] %s [%u] %s %u.%u.%u.%u\n", rte_lcore_id(), __FILE__, __LINE__, __func__,
+      (s >> 24)&0xff,(s >> 16)&0xff,(s >> 8)&0xff,s&0xff);
+    }
+#endif
     // XXX right ?
-    //arp_send_request(buf, next_hop, dst_port);
-  /*{
-    uint32_t s = ntohl(next_hop);
-    RTE_LOG(DEBUG, ETH, "[%u] %s [%u] %s %u.%u.%u.%u\n", rte_lcore_id(), __FILE__, __LINE__, __func__,
-            (s >> 24)&0xff,(s >> 16)&0xff,(s >> 8)&0xff,s&0xff);
-    s = ntohl(iphdr->dst_addr);
-    RTE_LOG(DEBUG, ETH, "[%u] %s [%u] %s %u.%u.%u.%u\n", rte_lcore_id(), __FILE__, __LINE__, __func__,
-            (s >> 24)&0xff,(s >> 16)&0xff,(s >> 8)&0xff,s&0xff);
-  }*/
-    arp_send_request(buf, iphdr->dst_addr, dst_port);
+    arp_send_request(buf, next_hop, dst_port);
+    //arp_send_request(buf, iphdr->dst_addr, dst_port);
     return 1;
   }
   ether_addr_copy(&entry->eth_addr, &eth->d_addr);
@@ -121,7 +125,6 @@ eth_random_enqueue_tx_pkt(struct rte_mbuf *buf, uint8_t dst_port)
 #else
   uint8_t middle_node = dst_port;
 #endif
-  middle_node = dst_port;
   ether_addr_copy(&eth->d_addr, &eth->s_addr);
   eth->d_addr.addr_bytes[0] = (uint8_t)(0xf + (dst_port << 4));
 #ifndef NDEBUG

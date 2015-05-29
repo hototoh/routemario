@@ -35,6 +35,9 @@ struct arp_table*
 create_arp_table(uint32_t size);
 
 void
+dump_arp_table(struct arp_table* table);
+
+void
 destroy_arp_table(struct arp_table* table);
 
 int

@@ -84,7 +84,7 @@ icmp_proc_echo(struct rte_mbuf *buf, struct icmp_hdr *icmphdr)
   iphdr->time_to_live = DEFAULT_TTL;
   iphdr->hdr_checksum = calc_checksum((uint16_t *)iphdr , buf->l3_len);
 
-  ip_enqueue_pkt(get_routing_Q() , buf);
+  ip_enqueue_routing_pkt(get_routing_Q() , buf);
 }
 
 static void

@@ -61,9 +61,6 @@ ip_routing(struct mbuf_queue* rqueue)
     uint32_t dst = ntohl(iphdr->dst_addr);
     int res = rte_lpm_lookup(rib, dst, &next_index);
     if(res != 0) {
-#ifndef NDEBUG
-      RTE_LOG(DEBUG, IPV4, "not matched lpm lookup\n");
-#endif
       rte_pktmbuf_free(buf);
       continue;
     }
@@ -87,9 +84,6 @@ ip_routing(struct mbuf_queue* rqueue)
 int
 ip_enqueue_routing_pkt(struct mbuf_queue* rqueue, struct rte_mbuf* buf)
 {
-#ifndef NDEBUG
-  RTE_LOG(DEBUG, IPV4, "[%u] %s [%u] %s\n", rte_lcore_id(), __FILE__, __LINE__, __func__);
-#endif
   struct ipv4_hdr *iphdr;
   iphdr = (struct ipv4_hdr*) (rte_pktmbuf_mtod(buf, char *) + buf->l2_len);
   rqueue->queue[(rqueue->len)++] = buf;  
@@ -165,9 +159,6 @@ ip_rcv(struct rte_mbuf **bufs, uint16_t n_rx)
         }
         case IPPROTO_TCP: 
         case IPPROTO_UDP: 
-#ifndef NDEBUG
-          RTE_LOG(DEBUG, IPV4, "[%u] %s %u %s to this router so drop\n", rte_lcore_id(), __FILE__, __LINE__, __func__);
-#endif
           ;
       }
       rte_pktmbuf_free(buf);
@@ -177,30 +168,27 @@ ip_rcv(struct rte_mbuf **bufs, uint16_t n_rx)
     /* packets to other hosts. */
     /* check the TTL */ 
     if((--(iphdr->time_to_live)) <= 0) {
-#ifndef NDEBUG
-      RTE_LOG(DEBUG, IPV4, "TTL exceeded\n");
-#endif
       icmp_send_time_exceeded(buf, ndst);
       continue;
     }
 
     /* this includes other ports subnet */
+    /*
     int dst_port = is_own_subnet(intfs, ndst);
     if(dst_port >= 0) {
       iphdr->hdr_checksum = 0;
       iphdr->hdr_checksum = rte_ipv4_cksum(iphdr);
       if(!rewrite_mac_addr(buf, dst_port, iphdr->dst_addr)) {
-#ifndef NDEBUG
-        RTE_LOG(DEBUG, IPV4, "[%u] %s %u %s forwarding\n", rte_lcore_id(), __FILE__, __LINE__, __func__);
-#endif
         eth_enqueue_tx_packet(buf, dst_port);
       }
+
 #ifndef NDEBUG
       RTE_LOG(DEBUG, IPV4, "[%u] %s %u %s forwarding fin\n", rte_lcore_id(), __FILE__, __LINE__, __func__);
 #endif
       continue;
     }
-    assert(false);
+    */
+
     if (unlikely(ip_enqueue_routing_pkt(rq, buf))) {
       RTE_LOG(DEBUG, IPV4, "[%u] %s %u %s ip routing\n", rte_lcore_id(), __FILE__, __LINE__, __func__);
       ip_routing(rq);

@@ -10,6 +10,7 @@
 #include <unistd.h>
 #include <errno.h>
 #include <time.h>
+#include <signal.h>
 #include <getopt.h>
 
 #include <rte_config.h>
@@ -107,6 +108,20 @@ static unsigned int rmario_rx_queue_per_lcore = RTE_MAX_ETHPORTS;
 static int64_t timer_period = TIMER_PERIOD * TIMER_MILLISECOND * 1000; 
 
 char* host_names[4] = {"peach", "mario", "yoshi", "luigi"};
+
+static void
+sig_dump(int sig)
+{
+  printf("\n");
+  dump_arp_table(arp_tb);
+  {
+    uint8_t lcore_id;
+    RTE_LCORE_FOREACH_SLAVE(lcore_id) {
+      if (rte_eal_wait_lcore(lcore_id) < 0)
+        return ;
+    }
+  }
+}
 
 void
 show_unit(double val, char *unit)
@@ -540,7 +555,8 @@ main(int argc, char **argv)
   for (uint8_t port_id = 0; port_id < n_ports; port_id++) {
     rte_eth_stats_reset(port_id);
   }
-
+    init_vlb_seed();
+  signal(SIGINT, sig_dump);
 	/* launch per-lcore init on every lcore */
   rte_eal_mp_remote_launch(rmario_launch_one_lcore, NULL, CALL_MASTER);
   {
@@ -550,7 +566,7 @@ main(int argc, char **argv)
         return -1;
     }
   }
-
+  
   return 0;
 }
 

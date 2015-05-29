@@ -96,24 +96,24 @@ is_own_subnet(struct l3_interfaces *l3ifs, uint32_t addr)
     struct l3_interface *l3if = &l3_list[i];
     if (l3if == NULL) continue;
 #ifndef NDEBUG
-      {
-        uint32_t s = l3if->ip_addr;
-        uint32_t d = addr;
-        uint32_t x = l3if->ip_addr ^ addr;
-        uint32_t m = l3if->ip_mask;
-        uint32_t r = x & m;
-        RTE_LOG(INFO, L3IF,
-                "\nsrc  :%u.%u.%u.%u"
-                "\ndst  :%u.%u.%u.%u"
-                "\nmask :%u.%u.%u.%u"
-                "\nxor  :%u.%u.%u.%u"
-                "\nres  :%u.%u.%u.%u\n",
-                (s >> 24)&0xff,(s >> 16)&0xff,(s >> 8)&0xff,s&0xff,
-                (d >> 24)&0xff,(d>> 16)&0xff,(d >> 8)&0xff,d&0xff,
-                (m >> 24)&0xff,(m>> 16)&0xff,(m >> 8)&0xff,m&0xff,
-                (x >> 24)&0xff,(x >> 16)&0xff,(x >> 8)&0xff,x&0xff,
-                (r >> 24)&0xff,(r>> 16)&0xff,(r >> 8)&0xff,r&0xff);
-      }
+    {
+      uint32_t s = l3if->ip_addr;
+      uint32_t d = addr;
+      uint32_t x = l3if->ip_addr ^ addr;
+      uint32_t m = l3if->ip_mask;
+      uint32_t r = x & m;
+      RTE_LOG(INFO, L3IF,
+              "\nsrc  :%u.%u.%u.%u"
+              "\ndst  :%u.%u.%u.%u"
+              "\nmask :%u.%u.%u.%u"
+              "\nxor  :%u.%u.%u.%u"
+              "\nres  :%u.%u.%u.%u\n",
+              (s >> 24)&0xff,(s >> 16)&0xff,(s >> 8)&0xff,s&0xff,
+              (d >> 24)&0xff,(d>> 16)&0xff,(d >> 8)&0xff,d&0xff,
+              (m >> 24)&0xff,(m>> 16)&0xff,(m >> 8)&0xff,m&0xff,
+              (x >> 24)&0xff,(x >> 16)&0xff,(x >> 8)&0xff,x&0xff,
+              (r >> 24)&0xff,(r>> 16)&0xff,(r >> 8)&0xff,r&0xff);
+    }
 #endif
     if(!((l3if->ip_addr ^ addr) & l3if->ip_mask)) {
       return l3if->port_id;

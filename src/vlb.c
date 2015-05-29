@@ -19,7 +19,7 @@
 #include "global_mario.h"
 
 #define VLB_SIZE (1 << 20)
-#define EXPIRE_TIME (3ULL << 35) 
+#define EXPIRE_TIME (3ULL << 25) 
 #define NODE_SIZE (4)
 
 #define RTE_LOGTYPE_VLB RTE_LOGTYPE_USER1
@@ -33,6 +33,12 @@ next_node_id() {
   if(round_robbin == _mid) 
     round_robbin = (++round_robbin) & (NODE_SIZE - 1); 
   return round_robbin; 
+}
+
+void
+init_vlb_seed()
+{
+    round_robbin = (uint8_t) rte_rand();
 }
 
 uint8_t

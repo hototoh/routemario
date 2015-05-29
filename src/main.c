@@ -244,7 +244,6 @@ rmario_launch_one_lcore(void * unused)
     return EXIT_FAILURE;
   }
   set_eth_tx_Qs(qs);
-  rte_eth_stats_reset(rte_lcore_id());
   
   rmario_main_process();  
 	return 0;
@@ -535,6 +534,10 @@ main(int argc, char **argv)
         return 1;
       }
     }
+  }
+
+  for (uint8_t port_id = 0; port_id < n_ports; port_id++) {
+    rte_eth_stats_reset(port_id);
   }
 
 	/* launch per-lcore init on every lcore */

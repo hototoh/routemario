@@ -153,16 +153,16 @@ print_stats()
     printf("\t");
     show_unit((double)stats.opackets /TIMER_PERIOD, "pps");
     printf("\t");
-    show_unit((double)stats.ibytes /TIMER_PERIOD, "bps");
+    show_unit((double)stats.ibytes*8.0 /TIMER_PERIOD, "bps");
     printf("\t");
-    show_unit((double)stats.obytes /TIMER_PERIOD, "bps");
+    show_unit((double)stats.obytes*8.0 /TIMER_PERIOD, "bps");
     printf("\n");
 #else
     printf("%lu:%lu:%lu:%lu\n",
            (double)stats.ipackets /TIMER_PERIOD,
            (double)stats.opackets /TIMER_PERIOD,
-           (double)stats.ibytes /TIMER_PERIOD,
-           (double)stats.obytes /TIMER_PERIOD);
+           (double)stats.ibytes*8.0 /TIMER_PERIOD,
+           (double)stats.obytes*8.0 /TIMER_PERIOD);
 
 #endif
     rte_eth_stats_reset(i);

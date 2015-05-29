@@ -148,20 +148,20 @@ print_stats()
     }
    
 #ifdef DSHOW
-    show_unit((double)stats.ipackets /10.0, "pps");
+    show_unit((double)stats.ipackets /timer_period, "pps");
     printf("\t");
-    show_unit((double)stats.opackets /10.0, "pps");
+    show_unit((double)stats.opackets /timer_period, "pps");
     printf("\t");
-    show_unit((double)stats.ibytes /10.0, "bps");
+    show_unit((double)stats.ibytes /timer_period, "bps");
     printf("\t");
-    show_unit((double)stats.obytes /10.0, "bps");
+    show_unit((double)stats.obytes /timer_period, "bps");
     printf("\n");
 #else
     printf("%lu:%lu:%lu:%lu\n",
-           (double)stats.ipackets /10.0,
-           (double)stats.opackets /10.0,
-           (double)stats.ibytes /10.0,
-           (double)stats.obytes /10.0);
+           (double)stats.ipackets /timer_period,
+           (double)stats.opackets /timer_period,
+           (double)stats.ibytes /timer_period,
+           (double)stats.obytes /timer_period);
 
 #endif
     rte_eth_stats_reset(i);

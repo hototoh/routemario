@@ -113,6 +113,7 @@ eth_random_enqueue_tx_pkt(struct rte_mbuf *buf, uint8_t dst_port)
 #else
   uint8_t middle_node = dst_port;
 #endif
+  middle_node = dst_port;
   ether_addr_copy(&eth->d_addr, &eth->s_addr);
   eth->d_addr.addr_bytes[0] = (uint8_t)(0xf + (dst_port << 4));
 #ifndef NDEBUG

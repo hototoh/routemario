@@ -244,7 +244,7 @@ rmario_launch_one_lcore(void * unused)
     return EXIT_FAILURE;
   }
   set_eth_tx_Qs(qs);
-  rte_eth_stats_reset(_mid);
+  rte_eth_stats_reset(rte_lcore_id());
   
   rmario_main_process();  
 	return 0;

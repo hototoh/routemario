@@ -46,7 +46,7 @@ SRCS-y := main.c arp.c eth.c fdb.c icmp.c interfaces.c ipv4.c mario_config.c mbu
 CFLAGS += -std=c99
 CFLAGS += -O1
 CFLAGS += -DNDEBUG
-CFLAGS += -DDSHOW
+#CFLAGS += -DDSHOW
 #CFLAGS += -DVLB
 #CFLAGS += $(WERROR_FLAGS)
 

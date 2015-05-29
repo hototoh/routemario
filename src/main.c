@@ -103,7 +103,8 @@ static unsigned int rmario_rx_queue_per_lcore = RTE_MAX_ETHPORTS;
 /* 1 day max */
 #define MAX_TIMER_PERIOD 86400 
 /* default period is 10 seconds */
-static int64_t timer_period = 10 * TIMER_MILLISECOND * 1000; 
+#define TIMER_PERIOD 5
+static int64_t timer_period = TIMER_PERIOD * TIMER_MILLISECOND * 1000; 
 
 char* host_names[4] = {"peach", "mario", "yoshi", "luigi"};
 
@@ -148,20 +149,20 @@ print_stats()
     }
    
 #ifdef DSHOW
-    show_unit((double)stats.ipackets /timer_period, "pps");
+    show_unit((double)stats.ipackets /TIMER_PERIOD, "pps");
     printf("\t");
-    show_unit((double)stats.opackets /timer_period, "pps");
+    show_unit((double)stats.opackets /TIMER_PERIOD, "pps");
     printf("\t");
-    show_unit((double)stats.ibytes /timer_period, "bps");
+    show_unit((double)stats.ibytes /TIMER_PERIOD, "bps");
     printf("\t");
-    show_unit((double)stats.obytes /timer_period, "bps");
+    show_unit((double)stats.obytes /TIMER_PERIOD, "bps");
     printf("\n");
 #else
     printf("%lu:%lu:%lu:%lu\n",
-           (double)stats.ipackets /timer_period,
-           (double)stats.opackets /timer_period,
-           (double)stats.ibytes /timer_period,
-           (double)stats.obytes /timer_period);
+           (double)stats.ipackets /TIMER_PERIOD,
+           (double)stats.opackets /TIMER_PERIOD,
+           (double)stats.ibytes /TIMER_PERIOD,
+           (double)stats.obytes /TIMER_PERIOD);
 
 #endif
     rte_eth_stats_reset(i);

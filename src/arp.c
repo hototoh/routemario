@@ -257,7 +257,8 @@ arp_send_request(struct rte_mbuf* buf, uint32_t tip, uint8_t port_id)
   ether_addr_copy(&l3_if->mac, &eth->s_addr);
   eth->ether_type = htons(ETHER_TYPE_ARP);
   //buf->pkt_len = 46;  
-  __eth_enqueue_tx_packet(buf, port_id);
+  //__eth_enqueue_tx_packet(buf, port_id);
+  __eth_enqueue_tx_pkt(buf, port_id);
   return;
 free:
   RTE_LOG(DEBUG, ARP, "l3 interface not found\n", __func__);  
